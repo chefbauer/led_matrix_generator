@@ -32,10 +32,12 @@ from other_layers import (
 from component_data import load_component
 from bom import build_bom
 from cpl import build_cpl
+from silkscreen import build_top_silkscreen
 
 
 # JLCPCB-Dateinamen-Konvention
 FILE_NAMES = {
+    "gto": "matrix-F_SilkS.gto",       # Top Silkscreen
     "gtl": "matrix-F_Cu.gtl",       # Top Copper
     "gbl": "matrix-B_Cu.gbl",       # Bottom Copper
     "gts": "matrix-F_Mask.gts",     # Top Solder Mask
@@ -83,6 +85,7 @@ def generate(
     print()
 
     files = {
+        FILE_NAMES["gto"]: build_top_silkscreen(leds, fp, pitch=pitch, board_width=w),
         FILE_NAMES["gtl"]: build_top_copper(leds, fp, pitch=pitch),
         FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch),
         FILE_NAMES["gts"]: build_top_soldermask(leds, fp, pitch=pitch),
