@@ -48,8 +48,7 @@ def generate_matrix(
     rows: int,
     pitch: float,
     footprint: Footprint = SK9822_EC20,
-    margin: float = 2.0,
-) -> List[LedInstance]:
+    margin: float = 2.0,    x_offset: float = 0.0,) -> List[LedInstance]:
     """
     Erzeugt die vollstaendige Liste aller LED-Instanzen fuer eine cols x rows Matrix.
 
@@ -80,7 +79,7 @@ def generate_matrix(
     # LED-Instanzen mit Koordinaten und Netzen aufbauen
     total_h = (rows - 1) * pitch + 2 * eff_margin
     for idx, (col, row) in enumerate(chain):
-        x = eff_margin + col * pitch
+        x = x_offset + eff_margin + col * pitch
         # Y: Row 0 = groesste Y (OBEN im Gerber-Viewer), Row n = kleinste Y (UNTEN)
         # Gerber-Standard: Y=0 unten, Y waechst nach oben
         y = total_h - eff_margin - row * pitch
@@ -118,10 +117,11 @@ def board_size(
     pitch: float,
     margin: float = 2.0,
     footprint: Footprint = SK9822_EC20,
+    extra_left: float = 0.0,
 ) -> tuple:
     """Berechnet die Board-Abmessungen in mm. margin=0 -> pitch/2 als Rand."""
     eff = _effective_margin(margin, pitch)
-    width  = 2 * eff + (cols - 1) * pitch
+    width  = extra_left + 2 * eff + (cols - 1) * pitch
     height = 2 * eff + (rows - 1) * pitch
     return width, height
 
