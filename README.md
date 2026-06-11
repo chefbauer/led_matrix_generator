@@ -17,6 +17,8 @@ Generiert fertige Produktionsdaten (Gerber + BOM + CPL) fuer addressierbare LED-
 direkt aus einer Konfigurationsdatei – ohne EDA-Tool, ohne externe Abhaengigkeiten.
 
 **Ausgabe:** Ein ZIP-Paket, das direkt bei JLCPCB hochgeladen werden kann (SMT Assembly).
+BOM und CPL sind in der Zip, müssen aber extra hochgeladen werden.
+
 
 ## Voraussetzungen
 
