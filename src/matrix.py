@@ -28,6 +28,19 @@ class LedInstance:
     # nets: {"VDD": "+5V", "GND": "GND", "DI": "DAT_1", "DO": "DAT_2", ...}
 
 
+def _effective_margin(margin: float, pitch: float) -> float:
+    """
+    Berechnet den tatsaechlich verwendeten Rand.
+
+    margin=0  ->  pitch / 2
+      Das platziert die Board-Kante genau auf halber Pitchdistanz zur LED-Mitte,
+      d.h. bei 5mm Pitch liegt die Kante 2.5mm vom LED-Zentrum entfernt.
+    """
+    if margin == 0.0:
+        return pitch / 2.0
+    return margin
+
+
 def generate_matrix(
     cols: int,
     rows: int,
@@ -43,12 +56,14 @@ def generate_matrix(
         rows:      Anzahl Zeilen
         pitch:     Abstand Mittelpunkt zu Mittelpunkt in mm
         footprint: Footprint-Objekt
-        margin:    Rand von Board-Kante zu erstem Pad-Mittelpunkt in mm
+        margin:    Rand von Board-Kante zu LED-Mittelpunkt in mm.
+                   0 = pitch/2 (Board-Kante auf halber Pitchdistanz zur LED-Mitte)
 
     Returns:
         Liste von LedInstance, sortiert nach Ketten-Index
     """
     leds: List[LedInstance] = []
+    eff_margin = _effective_margin(margin, pitch)
 
     # Serpentinen-Reihenfolge aufbauen: Liste von (col, row) in Ketten-Reihenfolge
     chain: List[tuple] = []
@@ -62,8 +77,8 @@ def generate_matrix(
 
     # LED-Instanzen mit Koordinaten und Netzen aufbauen
     for idx, (col, row) in enumerate(chain):
-        x = margin + col * pitch
-        y = margin + row * pitch
+        x = eff_margin + col * pitch
+        y = eff_margin + row * pitch
         ref = f"D{idx + 1}"
 
         nets = {
@@ -88,10 +103,17 @@ def generate_matrix(
     return leds
 
 
-def board_size(cols: int, rows: int, pitch: float, margin: float = 2.0):
-    """Berechnet die Board-Abmessungen in mm."""
-    width  = 2 * margin + (cols - 1) * pitch
-    height = 2 * margin + (rows - 1) * pitch
+def board_size(
+    cols: int,
+    rows: int,
+    pitch: float,
+    margin: float = 2.0,
+    footprint: Footprint = SK9822_EC20,
+) -> tuple:
+    """Berechnet die Board-Abmessungen in mm. margin=0 -> pitch/2 als Rand."""
+    eff = _effective_margin(margin, pitch)
+    width  = 2 * eff + (cols - 1) * pitch
+    height = 2 * eff + (rows - 1) * pitch
     return width, height
 
 
