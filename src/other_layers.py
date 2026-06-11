@@ -39,17 +39,16 @@ def build_top_soldermask(
     """Top Solder Mask: Oeffnungen ueber allen LED-Pads und VDD/GND-Via-Pads."""
     g = GerberWriter("Top Solder Mask (GTS)")
 
-    pad_ap = g.add_aperture(
-        ApertureShape.RECT,
-        fp.pads[0].width  + 2 * SM_EXP,
-        fp.pads[0].height + 2 * SM_EXP,
-    )
+    pw, ph = fp.pads[0].width + 2 * SM_EXP, fp.pads[0].height + 2 * SM_EXP
+    pad_ap_0  = g.add_aperture(ApertureShape.RECT, pw, ph)   # fuer 0° / 180°
+    pad_ap_90 = g.add_aperture(ApertureShape.RECT, ph, pw)   # fuer 90° / 270°
     via_ap = g.add_aperture(ApertureShape.CIRCLE, VIA_PAD_D + 2 * SM_EXP)
 
     for led in leds:
+        ap = pad_ap_90 if led.rotation % 180 != 0 else pad_ap_0
         for p in fp.pads:
             px, py = pad_pos(led.x, led.y, led.rotation, p)
-            g.flash(pad_ap, px, py)
+            g.flash(ap, px, py)
 
     for vx, vy in _via_list(leds):
         g.flash(via_ap, vx, vy)
