@@ -13,35 +13,37 @@ from typing import List
 from gerber_writer import GerberWriter, ApertureShape
 from footprint import SK9822_EC20, pad_pos, via_pos, Footprint
 from matrix import LedInstance, board_size
+import design_rules as DR
 
 
 # Solder-Mask-Expansion in mm (pro Seite)
-SM_EXP = 0.05
+SM_EXP = DR.CLEARANCE   # 0.05 wäre Standard; wir nehmen CLEARANCE = 0.15 als Expansion
 
 # Via-Parameter
-VIA_DRILL = 0.30   # Bohrungsdurchmesser mm
-VIA_PAD_D = 0.50   # Pad-Durchmesser mm
+VIA_DRILL = DR.VIA_DRILL
+VIA_PAD_D = DR.VIA_PAD_D
 
 
-def _via_list(leds: List[LedInstance]):
+def _via_list(leds: List[LedInstance], pitch: float = 5.0):
     """Alle Via-Positionen als Liste von (x, y) Tupeln."""
     result = []
     for led in leds:
         for sig in ("VDD", "GND"):
-            result.append(via_pos(led.x, led.y, led.rotation, sig))
+            result.append(via_pos(led.x, led.y, led.rotation, sig, pitch))
     return result
 
 
 def build_top_soldermask(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
+    pitch: float = 5.0,
 ) -> str:
     """Top Solder Mask: Oeffnungen ueber allen LED-Pads und VDD/GND-Via-Pads."""
     g = GerberWriter("Top Solder Mask (GTS)")
 
     pw, ph = fp.pads[0].width + 2 * SM_EXP, fp.pads[0].height + 2 * SM_EXP
-    pad_ap_0  = g.add_aperture(ApertureShape.RECT, pw, ph)   # fuer 0° / 180°
-    pad_ap_90 = g.add_aperture(ApertureShape.RECT, ph, pw)   # fuer 90° / 270°
+    pad_ap_0  = g.add_aperture(ApertureShape.RECT, pw, ph)
+    pad_ap_90 = g.add_aperture(ApertureShape.RECT, ph, pw)
     via_ap = g.add_aperture(ApertureShape.CIRCLE, VIA_PAD_D + 2 * SM_EXP)
 
     for led in leds:
@@ -50,7 +52,7 @@ def build_top_soldermask(
             px, py = pad_pos(led.x, led.y, led.rotation, p)
             g.flash(ap, px, py)
 
-    for vx, vy in _via_list(leds):
+    for vx, vy in _via_list(leds, pitch):
         g.flash(via_ap, vx, vy)
 
     return g.render()
@@ -59,12 +61,13 @@ def build_top_soldermask(
 def build_bottom_soldermask(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
+    pitch: float = 5.0,
 ) -> str:
     """Bottom Solder Mask: Oeffnungen ueber Via-Pads auf der Unterseite."""
     g = GerberWriter("Bottom Solder Mask (GBS)")
     via_ap = g.add_aperture(ApertureShape.CIRCLE, VIA_PAD_D + 2 * SM_EXP)
 
-    for vx, vy in _via_list(leds):
+    for vx, vy in _via_list(leds, pitch):
         g.flash(via_ap, vx, vy)
 
     return g.render()
@@ -88,6 +91,7 @@ def build_board_outline(
 def build_drill(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
+    pitch: float = 5.0,
 ) -> str:
     """
     Excellon Drill File fuer alle Via-Bohrungen.
@@ -104,7 +108,7 @@ def build_drill(
         "G05",
     ]
 
-    for vx, vy in _via_list(leds):
+    for vx, vy in _via_list(leds, pitch):
         xi = round(vx * 1000)
         yi = round(vy * 1000)
         lines.append(f"X{xi:+07d}Y{yi:+07d}")

@@ -15,6 +15,7 @@ from typing import List, Dict
 from gerber_writer import GerberWriter, ApertureShape
 from footprint import SK9822_EC20, via_pos as fp_via_pos, Footprint
 from matrix import LedInstance
+import design_rules as DR
 
 
 TRACE_POWER = 0.40   # Breite der Stromschiene in mm
@@ -23,11 +24,14 @@ TRACE_POWER = 0.40   # Breite der Stromschiene in mm
 def build_bottom_copper(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
+    pitch: float = 5.0,
 ) -> str:
     g = GerberWriter("Bottom Copper (GBL) - Power Planes")
 
-    trace_ap = g.add_aperture(ApertureShape.CIRCLE, TRACE_POWER)
-    via_ap   = g.add_aperture(ApertureShape.CIRCLE, 0.50)
+    w_bus = DR.bus_width(pitch)
+    trace_vdd = g.add_aperture(ApertureShape.CIRCLE, w_bus)
+    trace_gnd = g.add_aperture(ApertureShape.CIRCLE, w_bus)
+    via_ap    = g.add_aperture(ApertureShape.CIRCLE, DR.VIA_PAD_D)
 
     # Zeilen-Gruppen aufbauen
     rows: Dict[int, List[LedInstance]] = {}
@@ -44,13 +48,14 @@ def build_bottom_copper(
             xs = []
             y_val = None
             for led in row_leds:
-                vx, vy = fp_via_pos(led.x, led.y, led.rotation, sig)
+                vx, vy = fp_via_pos(led.x, led.y, led.rotation, sig, pitch)
                 xs.append(vx)
                 y_val = vy  # alle LEDs einer Zeile haben denselben via_y
 
-            x_min = min(xs) - TRACE_POWER / 2
-            x_max = max(xs) + TRACE_POWER / 2
-            g.draw(trace_ap, x_min, y_val, x_max, y_val)
+            x_min = min(xs) - w_bus / 2
+            x_max = max(xs) + w_bus / 2
+            ap = trace_vdd if sig == "VDD" else trace_gnd
+            g.draw(ap, x_min, y_val, x_max, y_val)
 
             for vx in xs:
                 g.flash(via_ap, vx, y_val)

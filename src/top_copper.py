@@ -22,15 +22,17 @@ from gerber_writer import GerberWriter, ApertureShape
 from footprint import SK9822_EC20, get_pad, pad_pos, via_pos, Footprint
 from matrix import LedInstance
 from router import route, led_obstacles
+import design_rules as DR
 
 
-TRACE_DATA  = 0.15   # Daten-Traces (DI/DO, CI/CO)
-TRACE_POWER = 0.20   # Power-Stichleitung Via -> Pad
+TRACE_DATA  = DR.TRACE_DATA    # 0.15 mm
+TRACE_POWER = DR.TRACE_POWER   # 0.20 mm
 
 
 def build_top_copper(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
+    pitch: float = 5.0,
 ) -> str:
     g = GerberWriter("Top Copper (GTL) - LED Matrix")
 
@@ -86,16 +88,18 @@ def build_top_copper(
             g.draw(trace_d, path[i][0], path[i][1], path[i+1][0], path[i+1][1])
 
     # -------------------------------------------------------------------
-    # 3. Power-Stichleitungen Via -> Pad (Top Layer)
+    # 3. Power-Stichleitungen Via -> Pad (senkrecht, Top Layer)
     #
-    #    Da Via und Pad nach der Rotation dieselbe rotierte Y-Koordinate
-    #    haben, sind diese Traces horizontal.
+    #    Via liegt auf gleicher X wie Pad, Y auf Schienen-Mittellinie.
+    #    Stichleitung: senkrechte Linie von pad_y bis via_y.
     # -------------------------------------------------------------------
+    pitch = pitch  # aus Parameter
     for led in leds:
         for sig in ("VDD", "GND"):
-            vx, vy = via_pos(led.x, led.y, led.rotation, sig)
+            vx, vy = via_pos(led.x, led.y, led.rotation, sig, pitch)
             px, py = pad_pos(led.x, led.y, led.rotation, get_pad(fp, sig))
             g.flash(via_ap, vx, vy)
-            g.draw(trace_p, vx, vy, px, py)
+            # Stichleitung: senkrecht vom Pad bis zur Via (gleiche X)
+            g.draw(trace_p, px, py, vx, vy)
 
     return g.render()
