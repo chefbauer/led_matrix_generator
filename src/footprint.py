@@ -161,25 +161,31 @@ def via_pos(
     """
     Absolute Position der Power-Via fuer VDD oder GND.
 
-    Jede LED-Reihe hat exakt EINEN VDD-Bus und EINEN GND-Bus:
-      - Der Bus liegt auf der gleichen Seite wie der jeweilige Pad
-        (oberhalb LED-Mitte fuer oben-liegenden Pad, unterhalb fuer unten-liegenden)
-      - Bus-Mitte: led_y +/- (CLEARANCE + bus_breite/2)
+    Via liegt auf gleicher X wie das Pad, Y auf der Stromschiene.
+    Position = max(Bus-Mitte, sichere Drill-Distanz vom Pad).
 
-    Diese Formel gilt fuer jede Reihe separat, sodass N Reihen = N*2 Busse entstehen.
+    JLCPCB: Drill-Kante >= 0.25mm von fremdem Pad-Kupfer (VIA_DRILL_CLEAR).
+    Nach 90/270-Rotation liegt PAD_W (0.875mm) in Y-Richtung:
+      pad_outer = |pad_center_y| + PAD_W/2
+      safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL/2
     """
-    from design_rules import CLEARANCE, bus_width
+    from design_rules import CLEARANCE, bus_width, VIA_DRILL, VIA_DRILL_CLEAR
 
-    # Via-X = Pad-X
     vx = via_pad_x(led_x, led_y, rotation, signal)
 
-    # Pad-Seite bestimmen: wohin zeigt der Pad nach Rotation?
     _PAD_X = {"VDD": PAD_XR, "GND": PAD_XL}
     lx = _PAD_X[signal]
     _, pad_ry = rotate_xy(lx, 0.0, rotation)
-    sign = +1 if pad_ry > 0 else -1  # +1 = Pad unten, -1 = Pad oben
+    sign = +1 if pad_ry > 0 else -1
 
-    w = bus_width(pitch)   # = pitch/2 - 2*CLEARANCE
-    vy = led_y + sign * (CLEARANCE + w / 2)
+    # Nominale Bus-Mitte
+    w = bus_width(pitch)
+    nominal = CLEARANCE + w / 2
 
+    # Sichere Mindestdistanz: Drill darf Pad-Kupfer nicht beruehren
+    # +0.01mm Puffer gegen Floating-Point-Grenzfaelle
+    pad_outer = abs(pad_ry) + PAD_W / 2
+    safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL / 2 + 0.01
+
+    vy = led_y + sign * max(nominal, safe_min)
     return (vx, vy)

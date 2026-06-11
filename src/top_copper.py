@@ -81,11 +81,20 @@ def build_top_copper(
         ci_pad = get_pad(fp, "CI")
         x1, y1 = pad_pos(led.x,      led.y,      led.rotation,      co_pad)
         x2, y2 = pad_pos(next_led.x, next_led.y, next_led.rotation, ci_pad)
-        path = route(x1, y1, x2, y2, obstacles,
-                     (led.x, led.y), (next_led.x, next_led.y),
-                     trace_w=TRACE_DATA)
-        for i in range(len(path) - 1):
-            g.draw(trace_d, path[i][0], path[i][1], path[i+1][0], path[i+1][1])
+
+        if led.row != next_led.row and abs(x1 - x2) < 0.01:
+            # Reihen-Uebergang: DO->DI und CO->CI liegen auf gleicher X
+            # -> CLK-Trace muss nach aussen versetzt werden (sonst Ueberlagerung)
+            # Richtung: gerade Reihe (90°) = rechts (+), ungerade (270°) = links (-)
+            offset_sign = +1.0 if led.rotation == 90.0 else -1.0
+            x_mid = x1 + offset_sign * (DR.TRACE_DATA + DR.MIN_SPACING)
+            clk_path = [(x1, y1), (x_mid, y1), (x_mid, y2), (x2, y2)]
+        else:
+            clk_path = route(x1, y1, x2, y2, obstacles,
+                             (led.x, led.y), (next_led.x, next_led.y),
+                             trace_w=TRACE_DATA)
+        for i in range(len(clk_path) - 1):
+            g.draw(trace_d, clk_path[i][0], clk_path[i][1], clk_path[i+1][0], clk_path[i+1][1])
 
     # -------------------------------------------------------------------
     # 3. Power-Stichleitungen Via -> Pad (senkrecht, Top Layer)
