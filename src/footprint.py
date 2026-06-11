@@ -127,32 +127,65 @@ def pad_pos(
 
 
 # ---------------------------------------------------------------------------
-# Via-Positionen im lokalen LED-Koordinatensystem (vor Rotation)
+# Via-Positionen: Midpoint-Schema (Vias zwischen den LED-Reihen)
 #
-# VDD lokal: (+0.7070, 0.0000)  -> Via 0.5 mm weiter in +Y: (+0.7070, +0.5000)
-# GND lokal: (-0.7070, 0.0000)  -> Via 0.5 mm weiter in -Y: (-0.7070, -0.5000)
+# Neue Strategie: Via liegt AUSSERHALB des Pad-Bereichs, direkt senkrecht
+# unter/ueber dem Pad, auf der Y-Hoehe der Stromschiene zwischen zwei Reihen.
 #
-# Nach 90° CCW-Rotation:
-#   VDD-Via  -> (-0.5000, +0.7070)  -> gleiche rotierte Y wie VDD-Pad (+0.7070)
-#   GND-Via  -> (+0.5000, -0.7070)  -> gleiche rotierte Y wie GND-Pad (-0.7070)
-#   => Top-Stichleitung Via->Pad ist horizontal ✓
-#   => VDD-Bus bei Y=led_y+0.707, GND-Bus bei Y=led_y-0.707 pro Zeile ✓
+# via_pos() gibt nur die X-Koordinate (= Pad-X rotiert) zurueck.
+# Die Y-Koordinate (Schienen-Y) kommt aus design_rules.bus_y() und wird
+# in top_copper.py und bottom_copper.py berechnet.
 #
-# Nach 270° CCW-Rotation:
-#   VDD-Via  -> (+0.5000, -0.7070)  -> gleiche rotierte Y wie VDD-Pad (-0.7070)
-#   GND-Via  -> (-0.5000, +0.7070)  -> gleiche rotierte Y wie GND-Pad (+0.7070)
-#   => horizontal ✓, andere Seite als bei 90° ✓
+# Hilfsfunktion via_pad_x(): gibt den absoluten X-Wert der Via (= Pad-X nach Rotation).
 # ---------------------------------------------------------------------------
-_VIA_LOCAL: Dict[str, Tuple[float, float]] = {
-    "VDD": (PAD_XR, +0.5000),
-    "GND": (PAD_XL, -0.5000),
-}
+
+def via_pad_x(
+    led_x: float, led_y: float, rotation: float, signal: str
+) -> float:
+    """
+    Absolute X-Koordinate der Via fuer VDD oder GND.
+
+    Die Via liegt auf derselben X-Koordinate wie das jeweilige Pad
+    (direkt senkrecht darueber/darunter).
+    """
+    _PAD_X = {"VDD": PAD_XR, "GND": PAD_XL}
+    lx = _PAD_X[signal]
+    rx, _ = rotate_xy(lx, 0.0, rotation)
+    return led_x + rx
 
 
 def via_pos(
-    led_x: float, led_y: float, rotation: float, signal: str
+    led_x: float, led_y: float, rotation: float, signal: str,
+    pitch: float = 5.0,
 ) -> Tuple[float, float]:
-    """Absolute Position der Power-Via fuer VDD oder GND nach Rotation."""
-    lx, ly = _VIA_LOCAL[signal]
-    rx, ry = rotate_xy(lx, ly, rotation)
-    return (led_x + rx, led_y + ry)
+    """
+    Absolute Position der Power-Via fuer VDD oder GND.
+
+    Via liegt auf gleicher X wie das Pad, Y auf der Stromschienen-Mittellinie
+    zwischen dieser und der naechsten Reihe (Midpoint-Schema).
+
+    Reihe gerade (90 Deg):   VDD-Pad zeigt nach unten (+Y) -> Via auf Schiene unten
+    Reihe ungerade (270 Deg): VDD-Pad zeigt nach oben (-Y) -> Via auf Schiene oben
+    """
+    from design_rules import bus_y, bus_centers
+
+    # Pad-X (gleich fuer Via)
+    vx = via_pad_x(led_x, led_y, rotation, signal)
+
+    # Pad-Y bestimmt Richtung
+    _PAD_X = {"VDD": PAD_XR, "GND": PAD_XL}
+    lx = _PAD_X[signal]
+    _, ry = rotate_xy(lx, 0.0, rotation)
+    pad_y = led_y + ry
+
+    # Seite: Pad unterhalb LED-Mitte -> Schiene unterhalb; Pad oberhalb -> Schiene oben
+    # Aber: VDD und GND teilen sich DIESELBE Schichten-Zone (gleiche Seite),
+    # sie liegen nur auf unterschiedlichen Y innerhalb dieser Zone.
+    # Bei 90 Deg CCW: VDD-Pad bei (led_x, led_y+0.707) -> Schiene unterhalb (below)
+    # Bei 270 Deg CCW: VDD-Pad bei (led_x, led_y-0.707) -> Schiene oberhalb (above)
+    side = "below" if rotation == 90.0 else "above"
+
+    vdd_y, gnd_y = bus_y(led_y, pitch, side)
+    vy = vdd_y if signal == "VDD" else gnd_y
+
+    return (vx, vy)

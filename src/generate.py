@@ -82,12 +82,12 @@ def generate(
     print()
 
     files = {
-        FILE_NAMES["gtl"]: build_top_copper(leds, fp),
-        FILE_NAMES["gbl"]: build_bottom_copper(leds, fp),
-        FILE_NAMES["gts"]: build_top_soldermask(leds, fp),
-        FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp),
+        FILE_NAMES["gtl"]: build_top_copper(leds, fp, pitch=pitch),
+        FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch),
+        FILE_NAMES["gts"]: build_top_soldermask(leds, fp, pitch=pitch),
+        FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp, pitch=pitch),
         FILE_NAMES["gko"]: build_board_outline(cols, rows, pitch, margin),
-        FILE_NAMES["drl"]: build_drill(leds, fp),
+        FILE_NAMES["drl"]: build_drill(leds, fp, pitch=pitch),
     }
 
     if has_component_data:
