@@ -40,24 +40,36 @@ def build_bottom_copper(
 
     # -------------------------------------------------------------------
     # Stromschienen und Via-Pads pro Zeile
+    # Bus-Y = nominale Schienenmitte (unabhaengig von der Via-Position)
+    # Via-Y kann durch Sicherheitsabstand weiter verschoben sein
     # -------------------------------------------------------------------
+    w = DR.bus_width(pitch)
+
     for row_idx in sorted(rows.keys()):
         row_leds = rows[row_idx]
+        first = row_leds[0]
 
         for sig in ("VDD", "GND"):
-            xs = []
-            y_val = None
+            # Via-Positionen (ggf. sicherheitsbedingt verschoben)
+            via_xs = []
+            via_ys = []
             for led in row_leds:
                 vx, vy = fp_via_pos(led.x, led.y, led.rotation, sig, pitch)
-                xs.append(vx)
-                y_val = vy  # alle LEDs einer Zeile haben denselben via_y
+                via_xs.append(vx)
+                via_ys.append(vy)
 
-            x_min = min(xs) - w_bus / 2
-            x_max = max(xs) + w_bus / 2
+            # Vorzeichen aus Via-Richtung (gleich fuer alle LEDs einer Reihe)
+            sign = +1 if via_ys[0] > first.y else -1
+
+            # Bus bei nominalem Y (CLEARANCE + w/2 von LED-Mitte)
+            bus_y_val = first.y + sign * (DR.CLEARANCE + w / 2)
+
+            x_min = min(via_xs) - w / 2
+            x_max = max(via_xs) + w / 2
             ap = trace_vdd if sig == "VDD" else trace_gnd
-            g.draw(ap, x_min, y_val, x_max, y_val)
+            g.draw(ap, x_min, bus_y_val, x_max, bus_y_val)
 
-            for vx in xs:
-                g.flash(via_ap, vx, y_val)
+            for vx, vy in zip(via_xs, via_ys):
+                g.flash(via_ap, vx, vy)
 
     return g.render()
