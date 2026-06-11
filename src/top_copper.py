@@ -71,11 +71,23 @@ def build_top_copper(
         di_pad = get_pad(fp, "DI")
         x1, y1 = pad_pos(led.x,      led.y,      led.rotation,      do_pad)
         x2, y2 = pad_pos(next_led.x, next_led.y, next_led.rotation, di_pad)
-        path = route(x1, y1, x2, y2, obstacles,
-                     (led.x, led.y), (next_led.x, next_led.y),
-                     trace_w=TRACE_DATA)
-        for i in range(len(path) - 1):
-            g.draw(trace_d, path[i][0], path[i][1], path[i+1][0], path[i+1][1])
+
+        if led.row != next_led.row and abs(x1 - x2) < 0.01:
+            # Reihen-Uebergang: beide Pads auf gleicher X, Trace laeuft durch Koerper.
+            # Beide Traces als U-Route nach aussen. Damit sie sich nicht kreuzen:
+            #   CLK innen (x_inner): kuerzer, horizontale Segmente enden vor DAT-Vertikale
+            #   DAT aussen (x_outer): weiter, horizontale Segmente ausserhalb CLK-Vertikale
+            # Reihe gerade (270°) -> aussen = rechts (+), ungerade (90°) -> links (-)
+            offset_sign = +1.0 if led.rotation == 270.0 else -1.0
+            x_inner = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
+            x_outer = x_inner + offset_sign * (DR.TRACE_DATA + DR.MIN_SPACING)
+            dat_path = [(x1, y1), (x_outer, y1), (x_outer, y2), (x2, y2)]
+        else:
+            dat_path = route(x1, y1, x2, y2, obstacles,
+                             (led.x, led.y), (next_led.x, next_led.y),
+                             trace_w=TRACE_DATA)
+        for i in range(len(dat_path) - 1):
+            g.draw(trace_d, dat_path[i][0], dat_path[i][1], dat_path[i+1][0], dat_path[i+1][1])
 
         co_pad = get_pad(fp, "CO")
         ci_pad = get_pad(fp, "CI")
@@ -83,12 +95,10 @@ def build_top_copper(
         x2, y2 = pad_pos(next_led.x, next_led.y, next_led.rotation, ci_pad)
 
         if led.row != next_led.row and abs(x1 - x2) < 0.01:
-            # Reihen-Uebergang: DO->DI und CO->CI liegen auf gleicher X
-            # -> CLK-Trace muss nach aussen versetzt werden (sonst Ueberlagerung)
-            # Richtung: gerade Reihe (90°) = rechts (+), ungerade (270°) = links (-)
-            offset_sign = +1.0 if led.rotation == 90.0 else -1.0
-            x_mid = x1 + offset_sign * (DR.TRACE_DATA + DR.MIN_SPACING)
-            clk_path = [(x1, y1), (x_mid, y1), (x_mid, y2), (x2, y2)]
+            # CLK-Trace: innen (x_inner), damit keine Kreuzung mit DAT (x_outer)
+            offset_sign = +1.0 if led.rotation == 270.0 else -1.0
+            x_inner = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
+            clk_path = [(x1, y1), (x_inner, y1), (x_inner, y2), (x2, y2)]
         else:
             clk_path = route(x1, y1, x2, y2, obstacles,
                              (led.x, led.y), (next_led.x, next_led.y),

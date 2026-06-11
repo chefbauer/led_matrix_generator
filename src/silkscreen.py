@@ -94,6 +94,8 @@ def build_top_silkscreen(
 
     # -------------------------------------------------------------------
     # 1. Richtungspfeile zwischen benachbarten LEDs (gleiche Reihe)
+    # 270 Grad CCW = gerade Reihe, geht nach rechts -> Pfeil >
+    # 90  Grad CCW = ungerade Reihe, geht nach links  -> Pfeil <
     # -------------------------------------------------------------------
     for led in leds:
         nxt = by_index.get(led.index + 1)
@@ -101,7 +103,7 @@ def build_top_silkscreen(
             continue
         mid_x = (led.x + nxt.x) / 2
         mid_y = (led.y + nxt.y) / 2
-        arrow = '>' if led.rotation == 90.0 else '<'
+        arrow = '>' if led.rotation == 270.0 else '<'
         _draw_glyph(g, ap, arrow, mid_x, mid_y, size=1.1)
 
     # -------------------------------------------------------------------
@@ -116,16 +118,17 @@ def build_top_silkscreen(
         vdd_abs = via_pos(first.x, first.y, first.rotation, "VDD", pitch)
         gnd_abs = via_pos(first.x, first.y, first.rotation, "GND", pitch)
 
-        going_right = (first.rotation == 90.0)
+        going_right = (first.rotation == 270.0)
 
         if going_right:
-            # Gerade Reihe (->): alle Labels LINKS der ersten LED
-            label_x_dc = di_abs[0] - 0.75   # 0.2mm weiter weg
-            label_x_pm = di_abs[0] - 0.75   # +/- gleiche X wie D/C
+            # Gerade Reihe (->): Eingang links -> Labels links des DI-Pads
+            # Weit genug weg damit sie nicht auf den Pads liegen (1.5mm)
+            label_x_dc = first.x - fp.body_width / 2 - 1.5
+            label_x_pm = 0.4   # ganz links am Boardrand
         else:
-            # Ungerade Reihe (<-): alle Labels RECHTS der ersten LED
-            label_x_dc = di_abs[0] + 0.75
-            label_x_pm = di_abs[0] + 0.75
+            # Ungerade Reihe (<-): Eingang rechts -> Labels rechts
+            label_x_dc = first.x + fp.body_width / 2 + 1.5
+            label_x_pm = board_width - 0.4   # ganz rechts am Boardrand
 
         _draw_glyph(g, ap, 'D', label_x_dc, di_abs[1],  size=0.9)
         _draw_glyph(g, ap, 'C', label_x_dc, ci_abs[1],  size=0.9)
