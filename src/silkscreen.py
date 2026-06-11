@@ -121,18 +121,15 @@ def build_top_silkscreen(
         going_right = (first.rotation == 270.0)
 
         if going_right:
-            # Gerade Reihe (->): Eingang links -> Labels links des DI-Pads
-            # Weit genug weg damit sie nicht auf den Pads liegen (1.5mm)
-            label_x_dc = first.x - fp.body_width / 2 - 1.5
-            label_x_pm = 0.4   # ganz links am Boardrand
+            # Gerade Reihe (->): Eingang links -> alle Labels links der ersten LED
+            lx = first.x - fp.body_width / 2 - 0.8
         else:
-            # Ungerade Reihe (<-): Eingang rechts -> Labels rechts
-            label_x_dc = first.x + fp.body_width / 2 + 1.5
-            label_x_pm = board_width - 0.4   # ganz rechts am Boardrand
+            # Ungerade Reihe (<-): Eingang rechts -> alle Labels rechts der ersten LED
+            lx = first.x + fp.body_width / 2 + 0.8
 
-        _draw_glyph(g, ap, 'D', label_x_dc, di_abs[1],  size=0.9)
-        _draw_glyph(g, ap, 'C', label_x_dc, ci_abs[1],  size=0.9)
-        _draw_glyph(g, ap, '+', label_x_pm, vdd_abs[1], size=0.8)
-        _draw_glyph(g, ap, '-', label_x_pm, gnd_abs[1], size=0.8)
+        _draw_glyph(g, ap, 'D', lx, di_abs[1],  size=0.9)
+        _draw_glyph(g, ap, 'C', lx, ci_abs[1],  size=0.9)
+        _draw_glyph(g, ap, '+', lx, vdd_abs[1], size=0.8)
+        _draw_glyph(g, ap, '-', lx, gnd_abs[1], size=0.8)
 
     return g.render()
