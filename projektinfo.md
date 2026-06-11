@@ -1,5 +1,231 @@
 # Projektinfo: LED-Matrix-Gerber-Generator
 
+## Aktueller Stand (2026-06-11)
+
+Das Projekt ist funktionsfähig und erzeugt vollständige JLCPCB-kompatible Fertigungsdaten.
+
+### Erzeugte Ausgabedateien (ZIP)
+
+| Datei | Inhalt |
+|---|---|
+| `matrix-F_Cu.gtl` | Top Copper: LED-Pads, Daten-Traces (DI/DO, CI/CO), Via-Stichleitungen |
+| `matrix-B_Cu.gbl` | Bottom Copper: VDD/GND-Stromschienen + Via-Pads |
+| `matrix-F_Mask.gts` | Top Solder Mask: Öffnungen über allen Top-Pads und Vias |
+| `matrix-B_Mask.gbs` | Bottom Solder Mask: Öffnungen über Via-Pads |
+| `matrix-Edge_Cuts.gko` | Board Outline: Rechteck |
+| `matrix.drl` | Excellon Drill: Via-Bohrungen |
+| `BOM.csv` | Bill of Materials im JLCPCB-Format |
+| `CPL.csv` | Component Placement List im JLCPCB-Format |
+
+### CLI
+
+```bash
+python3 src/generate.py --cols 32 --rows 11 --pitch 5.0 --margin 2.5 --output output/matrix.zip
+```
+
+Parameter:
+- `--cols` / `--rows`: Matrixgröße
+- `--pitch`: Abstand LED-Mitte zu LED-Mitte in mm
+- `--margin`: Randabstand in mm (`0` = `pitch/2`)
+- `--led`: LED-Typ (Standard: `SK9822-EC20`)
+- `--output`: Ausgabedatei
+
+### Komponentendaten laden (einmalig pro Bauteil)
+
+```bash
+python3 src/fetch_component.py C2909059
+```
+
+Speichert unter `data/C2909059/`:
+- `component.json` – normalisierte Metadaten für BOM
+- `footprint.json` – Pad-Geometrie, Signalnamen, Pin-1-Marker (aus EasyEDA API geparst)
+- `raw.json` – vollständige API-Rohdaten
+
+---
+
+## Quelldateien
+
+### `src/fetch_component.py`
+
+Lädt Bauteil-Daten von der EasyEDA-API (`easyeda.com/api/products/{lcsc_id}/components`), kein Login erforderlich.
+
+Parst automatisch:
+- Pad-Koordinaten aus `packageDetail.dataStr.shape` (PAD~-Einträge)
+- Signalnamen aus Schaltzeichen-Shapes (P~-Einträge), mit Alias-Mapping (`SDO`→`DO`, `CKL`→`CI`, `CKO`→`CO`, `SDI`→`DI`)
+- Origin-Koordinaten aus Canvas-String (Index 16/17)
+- Pin-1-Marker-Position (Seidendruckkreis auf Layer 3)
+- EasyEDA-Einheit: 1 unit = 0.254 mm (= 10 mil)
+
+### `src/component_data.py`
+
+Lädt gecachte Daten aus `data/{lcsc_id}/component.json` als `ComponentInfo`-Dataclass.
+
+### `src/footprint.py`
+
+Footprint-Definitionen. Alle Werte direkt aus `data/C2909059/raw.json` abgeleitet.
+
+**SK9822-EC20 – verifizierte Geometrie:**
+
+Layout: 2 Spalten × 3 Reihen (nicht 3×2!)
+
+```
+        links (-0.7070 mm)   rechts (+0.7070 mm)
+oben   (-0.8001 mm):  Pad1=DO    Pad6=CO
+mitte  (+0.0000 mm):  Pad2=GND   Pad5=VDD
+unten  (+0.8001 mm):  Pad3=DI    Pad4=CI
+```
+
+Pad-Größe: `0.875 × 0.400 mm`
+Gehäuse: `2.0 × 2.0 mm`
+Pin-1-Marker: `(-1.680, -0.840) mm` relativ Mittelpunkt (oben-links)
+
+**Via-Positionen** (lokal, vor Rotation):
+- VDD-Via: `(+0.707, +0.500)` – 0.5 mm unterhalb VDD-Pad → nach Rotation horizontal zur Schiene
+- GND-Via: `(-0.707, -0.500)` – 0.5 mm oberhalb GND-Pad → nach Rotation horizontal zur Schiene
+
+**Rotationslogik:**
+- Gerade Reihen (→): 90° CCW → DO rechts, DI links → Trace innerhalb Reihe: horizontal
+- Ungerade Reihen (←): 270° CCW → DO links, DI rechts → Trace innerhalb Reihe: horizontal
+- Zeilenübergang (D_last → D_first_next): DO und DI liegen auf identischem X → Trace: vertikal
+
+Hilfsfunktionen: `rotate_xy()`, `pad_pos()`, `via_pos()`
+
+### `src/matrix.py`
+
+`LedInstance` – Datenklasse: `index, ref, col, row, x, y, rotation, nets`
+
+`generate_matrix(cols, rows, pitch, fp, margin)` – Serpentinen-Reihenfolge, Netz-Zuordnung, Rotation pro Reihe
+
+`board_size(cols, rows, pitch, margin)` – Platinengröße
+
+`_effective_margin(margin, pitch)` – `margin=0` → `pitch/2`
+
+### `src/gerber_writer.py`
+
+RS-274X-Writer. Format: `%FSLAX46Y46*%`, 1 mm = 1.000.000 Integer-Einheiten.
+
+API:
+```python
+g = GerberWriter("Kommentar")
+ap = g.add_aperture(ApertureShape.RECT, width, height)
+ap_c = g.add_aperture(ApertureShape.CIRCLE, diameter)
+g.flash(ap, x, y)
+g.draw(ap, x1, y1, x2, y2)
+g.rect_outline(ap, x0, y0, x1, y1)
+content = g.render()
+```
+
+### `src/top_copper.py`
+
+Erzeugt GTL:
+1. LED-Pads flashen (rotierte Positionen via `pad_pos()`)
+2. Daten-Traces: DO→DI und CO→CI zwischen Ketten-Nachbarn
+3. Power-Stichleitungen: Via → VDD-Pad und Via → GND-Pad (horizontal nach Rotation)
+
+### `src/bottom_copper.py`
+
+Erzeugt GBL:
+- Pro Reihe: horizontale VDD-Schiene von x_min bis x_max aller Vias dieser Reihe
+- Pro Reihe: horizontale GND-Schiene
+- Via-Pads flashen
+
+Via-Positionen via `fp_via_pos()` aus `footprint.py`.
+
+### `src/other_layers.py`
+
+- `build_top_soldermask()` – Pad-Öffnungen + Via-Öffnungen (SM_EXP = 0.05 mm pro Seite)
+- `build_bottom_soldermask()` – Via-Öffnungen auf Bottom
+- `build_board_outline()` – Rechteck aus `board_size()`
+- `build_drill()` – Excellon, alle Via-Bohrungen (VIA_DRILL = 0.30 mm)
+
+### `src/bom.py`
+
+Erzeugt `BOM.csv` im JLCPCB-Format:
+
+```
+Comment,Designator,Footprint,JLCPCB Part #
+SK9822-EC20,"D1,D2,...",LED-SMD_6P-L2.0-W2.0-P0.80-TL,C2909059
+```
+
+### `src/cpl.py`
+
+Erzeugt `CPL.csv` im JLCPCB-Format:
+
+```
+Designator,Mid X,Mid Y,Layer,Rotation
+D1,2.000mm,2.000mm,Top,90
+D2,7.000mm,2.000mm,Top,90
+...
+```
+
+Rotation = interne LED-Rotation (90°/270° CCW), direkt kompatibel mit JLCPCB-CPL-Standard.
+
+### `src/generate.py`
+
+Hauptskript. Assembliert alle Layer, lädt Komponentendaten, erzeugt ZIP.
+
+`JLCPCB_PARTS = {"SK9822-EC20": "C2909059"}` – Mapping LED-Typ → LCSC-Nummer.
+
+---
+
+## Verzeichnisstruktur
+
+```
+led_matrix_generator/
+├── src/
+│   ├── generate.py           # CLI-Einstiegspunkt
+│   ├── fetch_component.py    # EasyEDA API + Footprint-Parser
+│   ├── component_data.py     # Daten-Loader
+│   ├── footprint.py          # Pad-Geometrie, Rotationshelfer
+│   ├── matrix.py             # LED-Platzierung, Serpentine
+│   ├── gerber_writer.py      # RS-274X Writer
+│   ├── top_copper.py         # GTL-Generator
+│   ├── bottom_copper.py      # GBL-Generator
+│   ├── other_layers.py       # GTS, GBS, GKO, DRL
+│   ├── bom.py                # BOM CSV
+│   ├── cpl.py                # CPL CSV
+│   └── output/               # Ausgabe-ZIPs
+├── data/
+│   └── C2909059/
+│       ├── component.json    # normalisierte Metadaten
+│       ├── footprint.json    # Pad-Geometrie aus EasyEDA
+│       └── raw.json          # API-Rohdaten
+├── example/                  # JLCPCB-Beispieldateien (BOM, CPL)
+└── projektinfo.md
+```
+
+---
+
+## Bekannte Bauteile
+
+| LED | JLCPCB Part # | Package | Klasse |
+|---|---|---|---|
+| SK9822-EC20 | C2909059 | LED-SMD_6P-L2.0-W2.0-P0.80-TL | Extended Part |
+
+---
+
+## Design Rules (aktuell verwendet)
+
+| Parameter | Wert |
+|---|---|
+| Daten-Trace Breite | 0.15 mm |
+| Power-Stichleitung | 0.20 mm |
+| Stromschiene Bottom | 0.40 mm |
+| Via Pad-Ø | 0.50 mm |
+| Via Bohrung | 0.30 mm |
+| Solder Mask Expansion | 0.05 mm |
+| Board Outline Linie | 0.05 mm |
+
+---
+
+## Offene Punkte / Nächste Schritte
+
+- [ ] 32×11-Matrix erzeugen und bei JLCPCB hochladen
+- [ ] Anschlusspads (Connector) am Rand für DI/CI/VDD/GND
+- [ ] Silkscreen-Lage (Bauteilbeschriftung / Orientierungspfeile)
+- [ ] Design-Rule-Check der erzeugten Gerber (z.B. in KiCad-Viewer)
+- [ ] Weitere LED-Typen: fetch + footprint.json + JLCPCB_PARTS-Eintrag genügt
+
 ## Ziel
 
 Dieses Projekt soll einen Generator bereitstellen, der aus wenigen technischen Eingaben direkt fertige Produktionsdaten fuer LED-Matrizen erzeugt.
