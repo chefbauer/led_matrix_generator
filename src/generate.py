@@ -5,6 +5,11 @@ Aufruf:
     python3 generate.py [--cols N] [--rows M] [--pitch P] [--output FILE.zip]
 
 Standardwerte: 3x2 Matrix, 5mm Pitch, Ausgabe in output/matrix.zip
+
+Komponentendaten (BOM/CPL):
+    Werden aus data/{JLCPCB_PART}/component.json geladen.
+    Falls noch nicht vorhanden:
+        python3 fetch_component.py C2909059
 """
 
 import argparse
@@ -23,6 +28,9 @@ from other_layers import (
     build_board_outline,
     build_drill,
 )
+from component_data import load_component
+from bom import build_bom
+from cpl import build_cpl
 
 
 # JLCPCB-Dateinamen-Konvention
@@ -33,6 +41,13 @@ FILE_NAMES = {
     "gbs": "matrix-B_Mask.gbs",     # Bottom Solder Mask
     "gko": "matrix-Edge_Cuts.gko",  # Board Outline
     "drl": "matrix.drl",            # Drill
+    "bom": "BOM.csv",               # Bill of Materials
+    "cpl": "CPL.csv",               # Component Placement List
+}
+
+# JLCPCB-Teilenummern der verwendeten Bauteile
+JLCPCB_PARTS = {
+    "SK9822-EC20": "C2909059",
 }
 
 
@@ -48,9 +63,21 @@ def generate(
     leds = generate_matrix(cols, rows, pitch, fp, margin)
     w, h = board_size(cols, rows, pitch, margin, fp)
 
+    # Komponentendaten laden (BOM/CPL)
+    lcsc_id = JLCPCB_PARTS[fp_name]
+    try:
+        component = load_component(lcsc_id)
+        has_component_data = True
+    except FileNotFoundError as exc:
+        print(f"[WARNUNG] {exc}")
+        print(f"[WARNUNG] BOM und CPL werden NICHT erzeugt.")
+        has_component_data = False
+
     print(f"Matrix:  {cols} x {rows}  ({cols * rows} LEDs)")
     print(f"Pitch:   {pitch} mm")
     print(f"Board:   {w:.1f} x {h:.1f} mm")
+    if has_component_data:
+        print(f"Bauteil: {component.mfr_part}  [{component.jlcpcb_part}]  {component.package}")
     print(f"Output:  {output}")
     print()
 
@@ -62,6 +89,10 @@ def generate(
         FILE_NAMES["gko"]: build_board_outline(cols, rows, pitch, margin),
         FILE_NAMES["drl"]: build_drill(leds, fp),
     }
+
+    if has_component_data:
+        files[FILE_NAMES["bom"]] = build_bom(leds, component)
+        files[FILE_NAMES["cpl"]] = build_cpl(leds)
 
     # ZIP erzeugen
     out_path = Path(output)
