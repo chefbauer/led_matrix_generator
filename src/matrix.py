@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from typing import List, Dict
 from footprint import Footprint, SK9822_EC20
 
-
 @dataclass
 class LedInstance:
     """Eine platzierte LED in der Matrix."""
@@ -24,6 +23,9 @@ class LedInstance:
     row: int             # Zeile (0-basiert)
     x: float             # Absolute X-Position des Bauteilmittelpunkts in mm
     y: float             # Absolute Y-Position des Bauteilmittelpunkts in mm
+    rotation: float = 0.0  # Rotation in Grad CCW
+    #   gerade Reihen (→): 90° CCW  → DI links, DO rechts
+    #   ungerade Reihen (←): 270° CCW → DI rechts, DO links
     nets: Dict[str, str] = field(default_factory=dict)
     # nets: {"VDD": "+5V", "GND": "GND", "DI": "DAT_1", "DO": "DAT_2", ...}
 
@@ -80,6 +82,9 @@ def generate_matrix(
         x = eff_margin + col * pitch
         y = eff_margin + row * pitch
         ref = f"D{idx + 1}"
+        # Gerade Reihen (→): 90° CCW — DI links, DO rechts
+        # Ungerade Reihen (←): 270° CCW — DI rechts, DO links
+        rotation = 90.0 if row % 2 == 0 else 270.0
 
         nets = {
             "VDD": "+5V",
@@ -97,6 +102,7 @@ def generate_matrix(
             row=row,
             x=x,
             y=y,
+            rotation=rotation,
             nets=nets,
         ))
 

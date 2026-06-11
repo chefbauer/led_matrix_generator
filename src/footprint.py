@@ -15,8 +15,9 @@ Pad-Layout SK9822-EC20 (SMD2121-6P, 2.0x2.0mm Gehaeuse):
   Geprueft gegen Weltsuemi SK9822-EC20 Datenblatt, Packagezeichnung.
 """
 
+import math
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 
 @dataclass
@@ -92,3 +93,47 @@ def get_pad(fp: Footprint, signal: str) -> Pad:
 FOOTPRINTS = {
     "SK9822-EC20": SK9822_EC20,
 }
+
+
+# ---------------------------------------------------------------------------
+# Rotations- und Positionshilfen
+# ---------------------------------------------------------------------------
+
+def rotate_xy(x: float, y: float, degrees: float) -> Tuple[float, float]:
+    """Punkt (x, y) um `degrees` Grad CCW um den Ursprung rotieren."""
+    rad = math.radians(degrees)
+    c, s = math.cos(rad), math.sin(rad)
+    return (x * c - y * s, x * s + y * c)
+
+
+def pad_pos(
+    led_x: float, led_y: float, rotation: float, pad: "Pad"
+) -> Tuple[float, float]:
+    """Absolute Position eines Pads nach Rotation des Bauteils."""
+    rx, ry = rotate_xy(pad.x, pad.y, rotation)
+    return (led_x + rx, led_y + ry)
+
+
+# Via-Positionen im LOKALEN LED-Koordinatensystem (vor Rotation).
+#
+# Strategie: Via sitzt 0.5 mm weiter aussen als das jeweilige Pad
+# in der lokalen Y-Richtung.  Nach 90°/270°-Rotation liegt die Via
+# dadurch auf derselben rotierten Y-Koordinate wie das Pad →
+# die Top-Layer-Stichleitung Via → Pad wird horizontal.
+#
+#   VDD lokal: (+0.60, -0.675)  Via: (+0.60, -0.675 - 0.50) = (+0.60, -1.175)
+#   GND lokal: (-0.60, +0.675)  Via: (-0.60, +0.675 + 0.50) = (-0.60, +1.175)
+#
+_VIA_LOCAL: Dict[str, Tuple[float, float]] = {
+    "VDD": (0.60, -1.175),
+    "GND": (-0.60, +1.175),
+}
+
+
+def via_pos(
+    led_x: float, led_y: float, rotation: float, signal: str
+) -> Tuple[float, float]:
+    """Absolute Position der Power-Via fuer VDD oder GND nach Rotation."""
+    lx, ly = _VIA_LOCAL[signal]
+    rx, ry = rotate_xy(lx, ly, rotation)
+    return (led_x + rx, led_y + ry)
