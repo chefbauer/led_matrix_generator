@@ -10,7 +10,7 @@ und speichert sie unter:
 
 Verwendung als Script:
     python3 fetch_component.py C2909059
-    python3 fetch_component.py C2909059 --force   # Cache ignorieren
+    python3 fetch_component.py C2909059 --force-download   # Cache ignorieren
 
 Verwendung als Modul:
     from fetch_component import fetch_component
@@ -285,11 +285,11 @@ def fetch_component(lcsc_id: str, force: bool = False) -> dict[str, Any]:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print(f"Verwendung: {sys.argv[0]} <JLCPCB-Teilenummer> [--force]")
+        print(f"Verwendung: {sys.argv[0]} <JLCPCB-Teilenummer> [--force-download]")
         print(f"Beispiel:   {sys.argv[0]} C2909059")
         sys.exit(1)
 
-    force    = "--force" in sys.argv
+    force    = "--force-download" in sys.argv
     part_ids = [a for a in sys.argv[1:] if not a.startswith("-")]
 
     for pid in part_ids:

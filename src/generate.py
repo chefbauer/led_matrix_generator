@@ -16,6 +16,7 @@ import argparse
 import io
 import zipfile
 import os
+import configparser
 from pathlib import Path
 
 from footprint import SK9822_EC20, FOOTPRINTS
@@ -110,19 +111,64 @@ def generate(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LED-Matrix Gerber Generator")
-    parser.add_argument("--cols",   type=int,   default=3,              help="Anzahl Spalten")
-    parser.add_argument("--rows",   type=int,   default=2,              help="Anzahl Zeilen")
-    parser.add_argument("--pitch",  type=float, default=5.0,            help="Pitch in mm")
-    parser.add_argument("--margin", type=float, default=2.0,            help="Rand in mm")
-    parser.add_argument("--output", type=str,   default="output/matrix.zip", help="Ausgabedatei")
-    parser.add_argument("--led",    type=str,   default="SK9822-EC20",  help="LED-Typ")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Pfad zu einer .cfg-Datei (z.B. cfg/SK9822_5x4.cfg)")
+    parser.add_argument("--cols",   type=int,   default=None)
+    parser.add_argument("--rows",   type=int,   default=None)
+    parser.add_argument("--pitch",  type=float, default=None)
+    parser.add_argument("--margin", type=float, default=None)
+    parser.add_argument("--output", type=str,   default=None)
+    parser.add_argument("--led",    type=str,   default=None)
     args = parser.parse_args()
 
+    # Defaults
+    cfg_cols   = 3
+    cfg_rows   = 2
+    cfg_pitch  = 5.0
+    cfg_margin = 2.0
+    cfg_output = "output/matrix.zip"
+    cfg_led    = "SK9822-EC20"
+
+    # Config-Datei laden
+    if args.config:
+        cfg_path = Path(args.config)
+        if not cfg_path.is_absolute():
+            # relativ zum Workspace-Root (parent von src/)
+            cfg_path = Path(__file__).parent.parent / args.config
+        ini = configparser.ConfigParser()
+        ini.read(cfg_path)
+
+        cfg_cols   = ini.getint("matrix", "cols",   fallback=cfg_cols)
+        cfg_rows   = ini.getint("matrix", "rows",   fallback=cfg_rows)
+        cfg_pitch  = ini.getfloat("matrix", "pitch", fallback=cfg_pitch)
+        cfg_margin = ini.getfloat("matrix", "margin", fallback=cfg_margin)
+
+        # LED-Typ aus JLCPCB-Teilenummer ableiten
+        lcsc = ini.get("led", "jlcpcb_part", fallback=None)
+        if lcsc:
+            rev = {v: k for k, v in JLCPCB_PARTS.items()}
+            if lcsc in rev:
+                cfg_led = rev[lcsc]
+            else:
+                print(f"[FEHLER] JLCPCB-Teil '{lcsc}' nicht in JLCPCB_PARTS bekannt.")
+                raise SystemExit(1)
+
+        # Output-Name = Config-Dateiname ohne Extension
+        cfg_output = f"output/{cfg_path.stem}.zip"
+
+    # CLI-Argumente ueberschreiben Config
+    cols   = args.cols   if args.cols   is not None else cfg_cols
+    rows   = args.rows   if args.rows   is not None else cfg_rows
+    pitch  = args.pitch  if args.pitch  is not None else cfg_pitch
+    margin = args.margin if args.margin is not None else cfg_margin
+    output = args.output if args.output is not None else cfg_output
+    led    = args.led    if args.led    is not None else cfg_led
+
     generate(
-        cols=args.cols,
-        rows=args.rows,
-        pitch=args.pitch,
-        margin=args.margin,
-        output=args.output,
-        fp_name=args.led,
+        cols=cols,
+        rows=rows,
+        pitch=pitch,
+        margin=margin,
+        output=output,
+        fp_name=led,
     )
