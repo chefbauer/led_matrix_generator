@@ -68,6 +68,59 @@ VIA_DRILL_CLEAR  = 0.25   # mm: JLCPCB Mindestabstand Drill-Kante zu fremdem Pad
 BUS_GAP     = 0.30   # mm: Luecke zwischen VDD- und GND-Schiene (= MIN_SPACING)
 
 
+# ---------------------------------------------------------------------------
+# Busbar (vertikale Sammelschiene, Bottom-Layer, links/rechts vom Board)
+#
+# IPC-2221A externe Lage: I = 0.048 * dT^0.44 * A^0.725
+#   A in mil², t = 1oz = 1.378 mil, dT = 10°C Standard
+#
+# Layout Busbar-Zone (von links nach rechts):
+#   [CLEARANCE][GND w][BUS_GAP][VDD w][CLEARANCE][MIN_SPACING zur Matrix]
+#
+# GND aussen (Rand), VDD innen (naeher an Matrix).
+# ---------------------------------------------------------------------------
+
+BUSBAR_MIN_WIDTH = 5.0   # mm: minimale Breite einer einzelnen Sammelschiene
+
+
+def busbar_width_mm(
+    n_leds: int,
+    ma_per_led: float = 15.0,
+    copper_oz: float = 1.0,
+    delta_t: float = 10.0,
+) -> float:
+    """
+    Dynamische Busbar-Breite nach IPC-2221A (externe Lage), Minimum 5 mm.
+
+    Beispiele (1oz, 10 Grad Anstieg):
+      176 LEDs @  15mA =  2.64A -> 1.15mm -> 5.0mm (Minimum)
+      352 LEDs @  15mA =  5.28A -> 2.98mm -> 5.0mm
+      704 LEDs @  15mA = 10.56A -> 7.76mm -> 7.8mm (automatisch breiter)
+    """
+    k = 0.048
+    t_mil = copper_oz * 1.378
+    total = n_leds * ma_per_led / 1000.0
+    if total < 1e-6:
+        return BUSBAR_MIN_WIDTH
+    area_mil2 = (total / (k * delta_t ** 0.44)) ** (1.0 / 0.725)
+    w_mm = (area_mil2 / t_mil) * 0.0254
+    return max(BUSBAR_MIN_WIDTH, w_mm)
+
+
+def busbar_min_left_margin(
+    n_leds: int,
+    ma_per_led: float = 15.0,
+    copper_oz: float = 1.0,
+) -> float:
+    """
+    Minimales effektives linkes Margin fuer die Busbar-Zone.
+
+    Gesamtbreite: CLEARANCE + GND_w + BUS_GAP + VDD_w + CLEARANCE + MIN_SPACING
+    """
+    w = busbar_width_mm(n_leds, ma_per_led, copper_oz)
+    return 2 * CLEARANCE + w + BUS_GAP + w + MIN_SPACING
+
+
 def bus_width(pitch: float, body_height: float = 2.0) -> float:
     """
     Breite einer einzelnen Stromschiene.

@@ -61,10 +61,24 @@ def generate(
     margin: float = 2.0,
     output: str = "output/matrix.zip",
     fp_name: str = "SK9822-EC20",
+    busbar: int = 0,
+    led_current_ma: float = 15.0,
+    copper_oz: float = 1.0,
 ):
+    import design_rules as DR
     fp = FOOTPRINTS[fp_name]
-    leds = generate_matrix(cols, rows, pitch, fp, margin)
-    w, h = board_size(cols, rows, pitch, margin, fp)
+
+    # Busbar: extra Breite links, margin bleibt separat rundherum
+    n_leds = cols * rows
+    if busbar > 0:
+        busbar_w = DR.busbar_width_mm(n_leds, led_current_ma, copper_oz)
+        x_offset = busbar_w + 2 * DR.CLEARANCE + DR.BUS_GAP  # Gesamtbreite busbar-Zone
+    else:
+        busbar_w = 0.0
+        x_offset = 0.0
+
+    leds = generate_matrix(cols, rows, pitch, fp, margin, x_offset=x_offset)
+    w, h = board_size(cols, rows, pitch, margin, fp, extra_left=x_offset)
 
     # Komponentendaten laden (BOM/CPL)
     lcsc_id = JLCPCB_PARTS[fp_name]
@@ -81,17 +95,26 @@ def generate(
     print(f"Board:   {w:.1f} x {h:.1f} mm")
     if has_component_data:
         print(f"Bauteil: {component.mfr_part}  [{component.jlcpcb_part}]  {component.package}")
+    if busbar > 0:
+        print(f"Busbar:  {busbar} (links)  Breite={busbar_w:.2f}mm  x_offset={x_offset:.2f}mm")
     print(f"Output:  {output}")
     print()
 
     files = {
         FILE_NAMES["gto"]: build_top_silkscreen(leds, fp, pitch=pitch, board_width=w),
-        FILE_NAMES["gtl"]: build_top_copper(leds, fp, pitch=pitch),
-        FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch),
-        FILE_NAMES["gts"]: build_top_soldermask(leds, fp, pitch=pitch),
-        FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp, pitch=pitch),
-        FILE_NAMES["gko"]: build_board_outline(cols, rows, pitch, margin),
-        FILE_NAMES["drl"]: build_drill(leds, fp, pitch=pitch),
+        FILE_NAMES["gtl"]: build_top_copper(leds, fp, pitch=pitch,
+                                            busbar=busbar, x_offset=x_offset),
+        FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch,
+                                               busbar=busbar, led_current_ma=led_current_ma,
+                                               copper_oz=copper_oz, board_height=h,
+                                               x_offset=x_offset),
+        FILE_NAMES["gts"]: build_top_soldermask(leds, fp, pitch=pitch,
+                                                busbar=busbar, x_offset=x_offset),
+        FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp, pitch=pitch,
+                                                   busbar=busbar, led_current_ma=led_current_ma,
+                                                   copper_oz=copper_oz, board_height=h),
+        FILE_NAMES["gko"]: build_board_outline(cols, rows, pitch, margin, extra_left=x_offset),
+        FILE_NAMES["drl"]: build_drill(leds, fp, pitch=pitch, busbar=busbar, x_offset=x_offset),
     }
 
     if has_component_data:
@@ -131,6 +154,9 @@ if __name__ == "__main__":
     cfg_margin = 2.0
     cfg_output = "output/matrix.zip"
     cfg_led    = "SK9822-EC20"
+    cfg_busbar       = 0
+    cfg_led_current  = 15.0
+    cfg_copper_oz    = 1.0
 
     # Config-Datei laden
     if args.config:
@@ -145,6 +171,11 @@ if __name__ == "__main__":
         cfg_rows   = ini.getint("matrix", "rows",   fallback=cfg_rows)
         cfg_pitch  = ini.getfloat("matrix", "pitch", fallback=cfg_pitch)
         cfg_margin = ini.getfloat("matrix", "margin", fallback=cfg_margin)
+
+        # Busbar
+        cfg_busbar        = ini.getint("matrix",   "busbar",         fallback=0)
+        cfg_led_current   = ini.getfloat("matrix", "led_current_ma", fallback=15.0)
+        cfg_copper_oz     = ini.getfloat("matrix", "copper_oz",      fallback=1.0)
 
         # LED-Typ aus JLCPCB-Teilenummer ableiten
         lcsc = ini.get("led", "jlcpcb_part", fallback=None)
@@ -174,4 +205,7 @@ if __name__ == "__main__":
         margin=margin,
         output=output,
         fp_name=led,
+        busbar=cfg_busbar,
+        led_current_ma=cfg_led_current,
+        copper_oz=cfg_copper_oz,
     )

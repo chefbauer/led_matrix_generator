@@ -37,6 +37,8 @@ def build_top_soldermask(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
     pitch: float = 5.0,
+    busbar: int = 0,
+    x_offset: float = 0.0,
 ) -> str:
     """Top Solder Mask: Oeffnungen ueber allen LED-Pads und VDD/GND-Via-Pads."""
     g = GerberWriter("Top Solder Mask (GTS)")
@@ -55,6 +57,14 @@ def build_top_soldermask(
     for vx, vy in _via_list(leds, pitch):
         g.flash(via_ap, vx, vy)
 
+    # Busbar VDD-Vias auf Top
+    if busbar > 0:
+        from bottom_copper import busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD
+        bb_vias = busbar_vdd_via_positions(leds, pitch, x_offset)
+        bb_via_ap = g.add_aperture(ApertureShape.CIRCLE, BUSBAR_VDD_VIA_PAD + 2 * SM_EXP)
+        for vx, vy in bb_vias:
+            g.flash(bb_via_ap, vx, vy)
+
     return g.render()
 
 
@@ -62,13 +72,30 @@ def build_bottom_soldermask(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
     pitch: float = 5.0,
+    busbar: int = 0,
+    led_current_ma: float = 15.0,
+    copper_oz: float = 1.0,
+    board_height: float = 0.0,
 ) -> str:
-    """Bottom Solder Mask: Oeffnungen ueber Via-Pads auf der Unterseite."""
+    """Bottom Solder Mask: Oeffnungen ueber Via-Pads und Busbar-Bereichen."""
     g = GerberWriter("Bottom Solder Mask (GBS)")
     via_ap = g.add_aperture(ApertureShape.CIRCLE, VIA_PAD_D + 2 * SM_EXP)
 
     for vx, vy in _via_list(leds, pitch):
         g.flash(via_ap, vx, vy)
+
+    # Busbar-Solder-Mask: volle Hoehe freigeben (zum Anloeten von Drahten)
+    if busbar > 0 and board_height > 0:
+        w_b = DR.busbar_width_mm(len(leds), led_current_ma, copper_oz)
+        gnd_cx = DR.CLEARANCE + w_b / 2
+        vdd_cx = DR.CLEARANCE + w_b + DR.BUS_GAP + w_b / 2
+        # Freilegungshoehe: Board-Hoehe minus Clearance oben und unten
+        expose_h = board_height - 2 * SM_EXP
+        # RECT-Aperture: Breite = w_b, Hoehe = expose_h
+        busbar_ap = g.add_aperture(ApertureShape.RECT, w_b, expose_h)
+        center_y = board_height / 2
+        g.flash(busbar_ap, gnd_cx, center_y)  # GND-Busbar
+        g.flash(busbar_ap, vdd_cx, center_y)  # VDD-Busbar
 
     return g.render()
 
@@ -78,12 +105,13 @@ def build_board_outline(
     rows: int,
     pitch: float,
     margin: float = 2.0,
+    extra_left: float = 0.0,
 ) -> str:
     """Board Outline (GKO): Rechteck passend zur Matrix."""
     g = GerberWriter("Board Outline (GKO)")
     outline_ap = g.add_aperture(ApertureShape.CIRCLE, 0.05)
 
-    w, h = board_size(cols, rows, pitch, margin)
+    w, h = board_size(cols, rows, pitch, margin, extra_left=extra_left)
     g.rect_outline(outline_ap, 0.0, 0.0, w, h)
     return g.render()
 
@@ -92,12 +120,11 @@ def build_drill(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
     pitch: float = 5.0,
+    busbar: int = 0,
+    x_offset: float = 0.0,
 ) -> str:
     """
     Excellon Drill File fuer alle Via-Bohrungen.
-
-    Format: Minimales Excellon mit METRIC-Header.
-    Alle Bohrungen haben denselben Durchmesser (VIA_DRILL).
     """
     lines = [
         "M48",
@@ -112,6 +139,14 @@ def build_drill(
         xi = round(vx * 1000)
         yi = round(vy * 1000)
         lines.append(f"X{xi:+07d}Y{yi:+07d}")
+
+    # Busbar VDD-Vias (gleicher Durchmesser wie normale Vias)
+    if busbar > 0:
+        from bottom_copper import busbar_vdd_via_positions
+        for vx, vy in busbar_vdd_via_positions(leds, pitch, x_offset):
+            xi = round(vx * 1000)
+            yi = round(vy * 1000)
+            lines.append(f"X{xi:+07d}Y{yi:+07d}")
 
     lines.append("M30")
     return "\n".join(lines) + "\n"

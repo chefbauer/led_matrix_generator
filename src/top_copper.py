@@ -24,7 +24,6 @@ from matrix import LedInstance
 from router import route, led_obstacles
 import design_rules as DR
 
-
 TRACE_DATA  = DR.TRACE_DATA    # 0.15 mm
 TRACE_POWER = DR.TRACE_POWER   # 0.20 mm
 
@@ -33,6 +32,8 @@ def build_top_copper(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
     pitch: float = 5.0,
+    busbar: int = 0,
+    x_offset: float = 0.0,
 ) -> str:
     g = GerberWriter("Top Copper (GTL) - LED Matrix")
 
@@ -120,5 +121,28 @@ def build_top_copper(
             g.flash(via_ap, vx, vy)
             # Stichleitung: senkrecht vom Pad bis zur Via (gleiche X)
             g.draw(trace_p, px, py, vx, vy)
+
+    # -------------------------------------------------------------------
+    # 4. Busbar VDD-Sammelleitung (Top Layer, nur wenn busbar > 0)
+    #
+    # Jede Reihe hat eine VDD-Via an der rechten Kante der Busbar-Zone.
+    # Diese Vias werden auf dem Top Layer vertikal verbunden.
+    # Anschluss-Pad am oberen Ende fuer externe +5V Leitung.
+    # -------------------------------------------------------------------
+    if busbar > 0:
+        from bottom_copper import busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD
+        bb_vias = busbar_vdd_via_positions(leds, pitch, x_offset)
+        bb_via_ap = g.add_aperture(ApertureShape.CIRCLE, BUSBAR_VDD_VIA_PAD)
+        bb_trace = g.add_aperture(ApertureShape.CIRCLE, DR.TRACE_POWER)
+
+        # Via-Pads auf Top flashen
+        for vx, vy in bb_vias:
+            g.flash(bb_via_ap, vx, vy)
+
+        # Vertikale Sammelleitung von unterster bis oberster VDD-Via
+        if len(bb_vias) > 1:
+            ys = [vy for _, vy in bb_vias]
+            bx = bb_vias[0][0]  # alle gleiche X
+            g.draw(bb_trace, bx, min(ys), bx, max(ys))
 
     return g.render()
