@@ -56,8 +56,9 @@ TRACE_POWER = 0.20   # mm: Power-Stichleitung Top-Layer (Via -> Pad)
 # Via
 # ---------------------------------------------------------------------------
 
-VIA_PAD_D   = 0.50   # mm: Via-Pad-Durchmesser
-VIA_DRILL   = 0.30   # mm: Via-Bohrungs-Durchmesser
+VIA_PAD_D        = 0.50   # mm: Via-Pad-Durchmesser
+VIA_DRILL        = 0.30   # mm: Via-Bohrungs-Durchmesser
+VIA_DRILL_CLEAR  = 0.25   # mm: JLCPCB Mindestabstand Drill-Kante zu fremdem Pad-Kupfer
 
 
 # ---------------------------------------------------------------------------
