@@ -1,21 +1,42 @@
 """
 Footprint-Definitionen fuer LED-Matrix-Generator.
 
-Koordinatensystem: Ursprung (0,0) = Mittelpunkt des Gehaeuses.
-Alle Masse in mm. Positiv-Y = nach unten (Gerber-Standard).
+Koordinatensystem
+-----------------
+Ursprung (0,0) = Mittelpunkt des Gehaeuses. Alle Masse in mm.
+Gerber RS-274X: Y waechst nach OBEN (Math-Koordinaten).
 
-Pad-Layout SK9822-EC20 – geprueft gegen EasyEDA raw.json (C2909059):
-  2 Spalten x 3 Reihen (NICHT 3x2 wie frueher angenommen!)
+WICHTIG: Y-Flip bei EasyEDA-Import (verifiziert 2026-06-11)
+------------------------------------------------------------
+EasyEDA speichert Pad-Koordinaten mit Screen-Koordinaten (Y waechst nach UNTEN).
+Gerber RS-274X nutzt Math-Koordinaten (Y waechst nach OBEN).
+=> Beim Import aus raw.json das Y-Vorzeichen NEGIEREN!
 
-  EasyEDA-Einheit: 1 unit = 0.254 mm (= 10 mil)
-  c_origin = (400, 300.118) = Gehaeusemittelpunkt
+Ohne Y-Flip waeren DO und DI gespiegelt (DO schiene unten, ist aber oben).
+Verifiziert anhand EasyEDA Library Screenshot SK9822-EC20:
+  Schaltzeichen: SDO=Pin1 links-oben, GND=Pin2 links-mitte, SDI=Pin3 links-unten
+  Package (Foto): Pin1-Punkt oben-links -> Pad1=DO oben-links, Pad3=DI unten-links
 
-       links (-0.707)   rechts (+0.707)
-  oben  (-0.800):  Pad1=DO    Pad6=CO
-  mitte (+0.000):  Pad2=GND   Pad5=VDD
-  unten (+0.800):  Pad3=DI    Pad4=CI
+SK9822-EC20 Pad-Layout (KORREKT, nach Y-Flip, Gerber-Koordinaten)
+------------------------------------------------------------------
+  Oben  (+0.800):  Pad1=DO  (links)   Pad6=CO  (rechts)
+  Mitte (+0.000):  Pad2=GND (links)   Pad5=VDD (rechts)
+  Unten (-0.800):  Pad3=DI  (links)   Pad4=CI  (rechts)
 
-  Pin-1-Marker (Seidendruckkreis) oben-links -> Ecke bei (-1.680, -0.840)
+Rotationskonvention
+-------------------
+Gerade Reihen (Richtung rechts): 270 Grad CCW (= 90 Grad CW)
+  Ergebnis:
+    Links:  DI oben->links,  CI unten->links   = EINGAENGE
+    Rechts: DO oben->rechts, CO unten->rechts  = AUSGAENGE
+    Oben:   GND                                 = MINUS (-)
+    Unten:  VDD                                 = PLUS  (+)
+
+Ungerade Reihen (Richtung links): 90 Grad CCW
+  Ergebnis: gespiegelt, Eingaenge rechts, Ausgaenge links.
+
+Die Ausgaenge zeigen immer zur naechsten LED.
+Strom kommt oben an (-) und geht unten raus (+).
 """
 
 import math
@@ -46,33 +67,31 @@ class Footprint:
 
 
 # ---------------------------------------------------------------------------
-# SK9822-EC20 – Werte direkt aus EasyEDA raw.json (C2909059) berechnet
+# SK9822-EC20 – Werte direkt aus EasyEDA raw.json (C2909059), Y-Flip korrigiert.
 #
-# Umrechnung: EasyEDA-Unit * 0.254 = mm
+# EasyEDA nutzt Screen-Koordinaten (Y nach unten).
+# Gerber nutzt Math-Koordinaten (Y nach oben).
+# => Y-Werte aus raw.json NEGIEREN fuer korrekte Gerber-Darstellung.
 #
-# Pad-Groesse:
-#   width  = 3.4449 * 0.254 = 0.8750 mm
-#   height = 1.5748 * 0.254 = 0.4000 mm
+# Korrekte Lage im Gerber-Viewer (Y oben):
+#   Oben  (+0.800): DO (links), CO (rechts)
+#   Mitte (+0.000): GND (links), VDD (rechts)
+#   Unten (-0.800): DI (links), CI (rechts)
 #
-# Pad-Positionen (relativ c_origin = Gehaeusemitte):
-#   X links  = (397.2165 - 400.0) * 0.254 = -0.7070 mm
-#   X rechts = (402.7835 - 400.0) * 0.254 = +0.7070 mm
-#   Y oben   = (296.968  - 300.118) * 0.254 = -0.8001 mm
-#   Y mitte  = (300.118  - 300.118) * 0.254 =  0.0000 mm
-#   Y unten  = (303.268  - 300.118) * 0.254 = +0.8001 mm
-#
-# Pin-1-Marker (Seidendruckkreis auf Layer 3):
-#   (393.386 - 400.0) * 0.254 = -1.680 mm
-#   (296.811 - 300.118) * 0.254 = -0.840 mm
+# Mit 270° CCW (= 90° CW) Rotation fuer Reihe nach rechts:
+#   Links:  DI (unten), CI (oben)  = EINGAENGE
+#   Rechts: DO (unten), CO (oben)  = AUSGAENGE
+#   Oben:   GND                    = MINUS
+#   Unten:  VDD                    = PLUS
 # ---------------------------------------------------------------------------
 
 PAD_W  = 0.8750   # Pad-Breite  (aus raw.json)
 PAD_H  = 0.4000   # Pad-Hoehe   (aus raw.json)
 PAD_XL = -0.7070  # X linke Spalte
 PAD_XR = +0.7070  # X rechte Spalte
-PAD_YT = -0.8001  # Y obere Reihe
-PAD_YM =  0.0000  # Y mittlere Reihe
-PAD_YB = +0.8001  # Y untere Reihe
+PAD_YT = +0.8001  # Y oben  (negiert: EasyEDA -0.8001 -> Gerber +0.8001)
+PAD_YM =  0.0000  # Y mitte
+PAD_YB = -0.8001  # Y unten (negiert: EasyEDA +0.8001 -> Gerber -0.8001)
 
 SK9822_EC20 = Footprint(
     name="SK9822-EC20",
@@ -80,7 +99,7 @@ SK9822_EC20 = Footprint(
     body_width=2.0,
     body_height=2.0,
     pin1_corner_x=-1.680,
-    pin1_corner_y=-0.840,
+    pin1_corner_y=+0.840,   # Y-negiert
     pads=[
         # Linke Spalte (X = -0.707)
         Pad("1", "DO",  PAD_XL, PAD_YT, PAD_W, PAD_H),  # oben-links
@@ -183,9 +202,10 @@ def via_pos(
     nominal = CLEARANCE + w / 2
 
     # Sichere Mindestdistanz: Drill darf Pad-Kupfer nicht beruehren
-    # +0.01mm Puffer gegen Floating-Point-Grenzfaelle
+    # + 0.15mm extra Abstand (Fertigungstoleranz)
+    # + 0.01mm Puffer gegen Floating-Point-Grenzfaelle
     pad_outer = abs(pad_ry) + PAD_W / 2
-    safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL / 2 + 0.01
+    safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL / 2 + 0.15 + 0.01
 
     vy = led_y + sign * max(nominal, safe_min)
     return (vx, vy)

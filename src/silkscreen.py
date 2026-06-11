@@ -119,13 +119,13 @@ def build_top_silkscreen(
         going_right = (first.rotation == 90.0)
 
         if going_right:
-            # Gerade Reihe (->): D und C links der Pads, +/- ganz am linken Rand
-            label_x_dc = di_abs[0] - 0.55   # kurz links der DI/CI-Pads
-            label_x_pm = 0.45               # am linken Boardrand
+            # Gerade Reihe (->): alle Labels LINKS der ersten LED
+            label_x_dc = di_abs[0] - 0.75   # 0.2mm weiter weg
+            label_x_pm = di_abs[0] - 0.75   # +/- gleiche X wie D/C
         else:
-            # Ungerade Reihe (<-): alles rechts
-            label_x_dc = di_abs[0] + 0.55
-            label_x_pm = board_width - 0.45
+            # Ungerade Reihe (<-): alle Labels RECHTS der ersten LED
+            label_x_dc = di_abs[0] + 0.75
+            label_x_pm = di_abs[0] + 0.75
 
         _draw_glyph(g, ap, 'D', label_x_dc, di_abs[1],  size=0.9)
         _draw_glyph(g, ap, 'C', label_x_dc, ci_abs[1],  size=0.9)

@@ -78,13 +78,16 @@ def generate_matrix(
             chain.append((col, row))
 
     # LED-Instanzen mit Koordinaten und Netzen aufbauen
+    total_h = (rows - 1) * pitch + 2 * eff_margin
     for idx, (col, row) in enumerate(chain):
         x = eff_margin + col * pitch
-        y = eff_margin + row * pitch
+        # Y: Row 0 = groesste Y (OBEN im Gerber-Viewer), Row n = kleinste Y (UNTEN)
+        # Gerber-Standard: Y=0 unten, Y waechst nach oben
+        y = total_h - eff_margin - row * pitch
         ref = f"D{idx + 1}"
-        # Gerade Reihen (→): 90° CCW — DI links, DO rechts
-        # Ungerade Reihen (←): 270° CCW — DI rechts, DO links
-        rotation = 90.0 if row % 2 == 0 else 270.0
+        # Gerade Reihen (→): 270° CCW (= 90° CW) — DI/CI links, DO/CO rechts, GND oben, VDD unten
+        # Ungerade Reihen (←): 90° CCW (= 90° CW + 180°)
+        rotation = 270.0 if row % 2 == 0 else 90.0
 
         nets = {
             "VDD": "+5V",
