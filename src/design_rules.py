@@ -69,23 +69,22 @@ BUS_GAP     = 0.30   # mm: Luecke zwischen VDD- und GND-Schiene (= MIN_SPACING)
 
 def bus_width(pitch: float, body_height: float = 2.0) -> float:
     """
-    Schienen-Breite berechnen fuer gegebenen Pitch.
+    Breite einer einzelnen Stromschiene.
 
-    Bottom-Layer hat KEINE Bauteile -> volle Pitch-Breite nutzbar.
-    Der LED-Koerper spielt auf der Unterseite keine Rolle.
+    Jede LED-Reihe hat einen VDD-Bus AUF EINER SEITE und einen GND-Bus
+    AUF DER ANDEREN SEITE. Jeder Bus bekommt eine halbe Pitch-Zone:
 
-    Layout im vollen Pitch:
-        [CLEARANCE] [GND-Bus] [BUS_GAP] [VDD-Bus] [CLEARANCE] = pitch
+        [CLEARANCE][Bus][CLEARANCE] = pitch/2
+        Bus-Breite = pitch/2 - 2*CLEARANCE
 
     Beispiel pitch=5mm:
-        Bus-Breite = (5.0 - 0.15 - 0.15 - 0.30) / 2 = 2.20 mm
+        Bus-Breite = 2.5 - 2*0.15 = 2.20 mm
 
-    Returns
-    -------
-    float
-        Breite einer einzelnen Stromschiene in mm.
+    Gap zwischen VDD- und GND-Bus einer Reihe:
+        Gap = 2*(CLEARANCE + w/2) = 2*1.25 = 2.5mm (= Mitte-Mitte-Abstand)
+        Freier Spalt: 2.5 - 2.2 = 0.30 mm = MIN_SPACING ✓
     """
-    return (pitch - 2 * CLEARANCE - BUS_GAP) / 2
+    return pitch / 2 - 2 * CLEARANCE
 
 
 def bus_centers(pitch: float, body_height: float = 2.0) -> tuple[float, float]:

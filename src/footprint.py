@@ -161,31 +161,25 @@ def via_pos(
     """
     Absolute Position der Power-Via fuer VDD oder GND.
 
-    Via liegt auf gleicher X wie das Pad, Y auf der Stromschienen-Mittellinie
-    zwischen dieser und der naechsten Reihe (Midpoint-Schema).
+    Jede LED-Reihe hat exakt EINEN VDD-Bus und EINEN GND-Bus:
+      - Der Bus liegt auf der gleichen Seite wie der jeweilige Pad
+        (oberhalb LED-Mitte fuer oben-liegenden Pad, unterhalb fuer unten-liegenden)
+      - Bus-Mitte: led_y +/- (CLEARANCE + bus_breite/2)
 
-    Reihe gerade (90 Deg):   VDD-Pad zeigt nach unten (+Y) -> Via auf Schiene unten
-    Reihe ungerade (270 Deg): VDD-Pad zeigt nach oben (-Y) -> Via auf Schiene oben
+    Diese Formel gilt fuer jede Reihe separat, sodass N Reihen = N*2 Busse entstehen.
     """
-    from design_rules import bus_y, bus_centers
+    from design_rules import CLEARANCE, bus_width
 
-    # Pad-X (gleich fuer Via)
+    # Via-X = Pad-X
     vx = via_pad_x(led_x, led_y, rotation, signal)
 
-    # Pad-Y bestimmt Richtung
+    # Pad-Seite bestimmen: wohin zeigt der Pad nach Rotation?
     _PAD_X = {"VDD": PAD_XR, "GND": PAD_XL}
     lx = _PAD_X[signal]
-    _, ry = rotate_xy(lx, 0.0, rotation)
-    pad_y = led_y + ry
+    _, pad_ry = rotate_xy(lx, 0.0, rotation)
+    sign = +1 if pad_ry > 0 else -1  # +1 = Pad unten, -1 = Pad oben
 
-    # Seite: Pad unterhalb LED-Mitte -> Schiene unterhalb; Pad oberhalb -> Schiene oben
-    # Aber: VDD und GND teilen sich DIESELBE Schichten-Zone (gleiche Seite),
-    # sie liegen nur auf unterschiedlichen Y innerhalb dieser Zone.
-    # Bei 90 Deg CCW: VDD-Pad bei (led_x, led_y+0.707) -> Schiene unterhalb (below)
-    # Bei 270 Deg CCW: VDD-Pad bei (led_x, led_y-0.707) -> Schiene oberhalb (above)
-    side = "below" if rotation == 90.0 else "above"
-
-    vdd_y, gnd_y = bus_y(led_y, pitch, side)
-    vy = vdd_y if signal == "VDD" else gnd_y
+    w = bus_width(pitch)   # = pitch/2 - 2*CLEARANCE
+    vy = led_y + sign * (CLEARANCE + w / 2)
 
     return (vx, vy)

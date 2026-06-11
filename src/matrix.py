@@ -32,15 +32,15 @@ class LedInstance:
 
 def _effective_margin(margin: float, pitch: float) -> float:
     """
-    Berechnet den tatsaechlich verwendeten Rand.
+    Tatsaechlicher Rand = pitch/2 + margin.
 
-    margin=0  ->  pitch / 2
-      Das platziert die Board-Kante genau auf halber Pitchdistanz zur LED-Mitte,
-      d.h. bei 5mm Pitch liegt die Kante 2.5mm vom LED-Zentrum entfernt.
+    pitch/2 ist der Mindestrand (Boardkante genau auf halber Pitchdistanz
+    zur aeussersten LED-Mitte). margin ist ZUSAETZLICHER Rand darueber hinaus.
+
+    Beispiel pitch=5, margin=0: Rand = 2.5mm
+    Beispiel pitch=5, margin=2: Rand = 4.5mm
     """
-    if margin == 0.0:
-        return pitch / 2.0
-    return margin
+    return pitch / 2.0 + margin
 
 
 def generate_matrix(
