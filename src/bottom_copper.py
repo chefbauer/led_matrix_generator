@@ -69,6 +69,7 @@ def build_bottom_copper(
     copper_oz: float = 1.0,
     board_height: float = 0.0,
     x_offset: float = 0.0,
+    right_cap: float = 0.0,
 ) -> str:
     g = GerberWriter("Bottom Copper (GBL) - Power Planes")
 
@@ -104,6 +105,8 @@ def build_bottom_copper(
             sign = +1 if via_ys[0] > first.y else -1
             bus_y_val = first.y + sign * (DR.CLEARANCE + w / 2)
             x_max = max(via_xs) + w / 2
+            if right_cap > 0:
+                x_max = min(x_max, right_cap)
 
             if busbar > 0 and sig == "GND":
                 # GND: Schiene laeuft bis ganz links (Boardrand + Clearance)
@@ -113,7 +116,8 @@ def build_bottom_copper(
                 bb_via_x = x_offset - DR.CLEARANCE - BUSBAR_VDD_VIA_PAD / 2
                 x_min = bb_via_x + BUSBAR_VDD_VIA_PAD / 2 + DR.CLEARANCE + w / 2 - 0.7
             else:
-                x_min = min(via_xs) - w / 2
+                # busbar=0: beide Schienen bis ganz links (Boardrand + Clearance)
+                x_min = DR.CLEARANCE
 
             ap = trace_vdd if sig == "VDD" else trace_gnd
             g.draw(ap, x_min, bus_y_val, x_max, bus_y_val)

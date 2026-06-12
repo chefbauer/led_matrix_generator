@@ -28,6 +28,21 @@ TRACE_DATA  = DR.TRACE_DATA    # 0.15 mm
 TRACE_POWER = DR.TRACE_POWER   # 0.20 mm
 
 
+def _power_pad_obstacles(led, fp) -> list:
+    """Erzeugt Hindernis-Rechtecke fuer GND/VDD-Pads einer LED."""
+    result = []
+    for sig in ("GND", "VDD"):
+        try:
+            pad = get_pad(fp, sig)
+        except KeyError:
+            continue
+        px, py = pad_pos(led.x, led.y, led.rotation, pad)
+        pw = pad.width if led.rotation % 180 == 0 else pad.height
+        ph = pad.height if led.rotation % 180 == 0 else pad.width
+        result.append((px, py, pw, ph))
+    return result
+
+
 def build_top_copper(
     leds: List[LedInstance],
     fp: Footprint = SK9822_EC20,
@@ -86,7 +101,9 @@ def build_top_copper(
         else:
             dat_path = route(x1, y1, x2, y2, obstacles,
                              (led.x, led.y), (next_led.x, next_led.y),
-                             trace_w=TRACE_DATA)
+                             trace_w=TRACE_DATA,
+                             extra_obstacles=(_power_pad_obstacles(led, fp) +
+                                              _power_pad_obstacles(next_led, fp)))
         for i in range(len(dat_path) - 1):
             g.draw(trace_d, dat_path[i][0], dat_path[i][1], dat_path[i+1][0], dat_path[i+1][1])
 
@@ -105,7 +122,9 @@ def build_top_copper(
         else:
             clk_path = route(x1, y1, x2, y2, obstacles,
                              (led.x, led.y), (next_led.x, next_led.y),
-                             trace_w=TRACE_DATA)
+                             trace_w=TRACE_DATA,
+                             extra_obstacles=(_power_pad_obstacles(led, fp) +
+                                              _power_pad_obstacles(next_led, fp)))
         for i in range(len(clk_path) - 1):
             g.draw(trace_d, clk_path[i][0], clk_path[i][1], clk_path[i+1][0], clk_path[i+1][1])
 

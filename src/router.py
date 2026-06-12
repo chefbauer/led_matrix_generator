@@ -116,7 +116,21 @@ def _route_candidates(x1: float, y1: float, x2: float, y2: float) -> List[Path]:
         mid = (x2 - sx * diag, y2 - sy * diag)
         candidates.append([(x1, y1), mid, (x2, y2)])
 
-    # 6. Vollstaendig 45-Diagonal + Rest (nur wenn gleiche Laenge in H und V)
+    # 6. H-45-H (3 Segmente): horizontal → 45° → horizontal
+    #    dx>dy: (x1,y1)→(x1+span,y1)→(x2-span,y2)→(x2,y2)
+    #    dy>dx: (x1,y1)→(x1,y1+span)→(x2,y2-span)→(x2,y2)
+    if adx > ady > EPS:
+        span = (adx - ady) / 2.0
+        p1 = (x1 + sx * span, y1)
+        p2 = (x2 - sx * span, y2)
+        candidates.append([(x1, y1), p1, p2, (x2, y2)])
+    elif ady > adx > EPS:
+        span = (ady - adx) / 2.0
+        p1 = (x1, y1 + sy * span)
+        p2 = (x2, y2 - sy * span)
+        candidates.append([(x1, y1), p1, p2, (x2, y2)])
+
+    # 7. Vollstaendig 45-Diagonal (nur wenn gleiche Laenge in H und V)
     if abs(adx - ady) < EPS:
         candidates.append([(x1, y1), (x2, y2)])
 
@@ -137,6 +151,7 @@ def route(
     dst_pos: Tuple[float, float],
     trace_w: float = 0.15,
     clearance: float = 0.10,
+    extra_obstacles: List[Rect] | None = None,
 ) -> Path:
     """
     Berechnet einen kollisionsfreien H/V/45-Pfad von (x1,y1) nach (x2,y2).
@@ -164,6 +179,9 @@ def route(
         if not (abs(obs[0] - src_pos[0]) < EPS and abs(obs[1] - src_pos[1]) < EPS)
         and not (abs(obs[0] - dst_pos[0]) < EPS and abs(obs[1] - dst_pos[1]) < EPS)
     ]
+
+    if extra_obstacles:
+        obstacles.extend(extra_obstacles)
 
     for candidate in _route_candidates(x1, y1, x2, y2):
         if _path_clear(candidate, obstacles, trace_w, clearance):

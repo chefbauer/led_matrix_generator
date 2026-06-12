@@ -19,7 +19,7 @@ import os
 import configparser
 from pathlib import Path
 
-from footprint import footprint_from_data
+from footprint import footprint_from_data, has_pad
 from matrix import generate_matrix, board_size
 from top_copper import build_top_copper
 from bottom_copper import build_bottom_copper
@@ -34,6 +34,9 @@ from bom import build_bom
 from cpl import build_cpl
 from silkscreen import build_top_silkscreen
 from render_preview import render_zip
+# from trace_net import trace_nets   -- später aktivieren
+from edge_connector import (place_left, place_right, edge_gtl, edge_gbl,
+    edge_mask, edge_silk, edge_drill)
 
 
 # JLCPCB-Dateinamen-Konvention
@@ -80,6 +83,8 @@ def generate(
 
     leds = generate_matrix(cols, rows, pitch, fp, margin, x_offset=x_offset)
     w, h = board_size(cols, rows, pitch, margin, fp, extra_left=x_offset)
+    # VDD-Rail rechts 1mm kürzer wenn Edge-Connector aktiv ist
+    right_cap = (w - 2.0) if (busbar == 0 and not has_pad(fp, "CI")) else 0.0
 
     # Komponentendaten laden (BOM/CPL)
     try:
@@ -108,7 +113,7 @@ def generate(
         FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch,
                                                busbar=busbar, led_current_ma=led_current_ma,
                                                copper_oz=copper_oz, board_height=h,
-                                               x_offset=x_offset),
+                                               x_offset=x_offset, right_cap=right_cap),
         FILE_NAMES["gts"]: build_top_soldermask(leds, fp, pitch=pitch,
                                                 busbar=busbar, x_offset=x_offset),
         FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp, pitch=pitch,
@@ -122,6 +127,36 @@ def generate(
     if has_component_data:
         files[FILE_NAMES["bom"]] = build_bom(leds, component)
         files[FILE_NAMES["cpl"]] = build_cpl(leds)
+
+    # Edge-Connector (Halb-Loecher) nur bei busbar=0 + 4-Pin LED (kein CLK)
+    if busbar == 0 and not has_pad(fp, "CI"):
+        e_left  = place_left(leds, fp, h)
+        e_right = place_right(leds, fp, w, h)
+        all_vias = e_left + e_right
+        print(f"Edge vias links:  {len(e_left)} ({', '.join(f'{v.signal}@y={v.y:.2f}' for v in e_left)})")
+        print(f"Edge vias rechts: {len(e_right)} ({', '.join(f'{v.signal}@y={v.y:.2f}' for v in e_right)})")
+        for layer_key, layer_content in [
+            ("gtl", edge_gtl(e_left, e_right, leds, fp)),
+            ("gbl", edge_gbl(e_left, e_right)),
+            ("gts", edge_mask(e_left) + edge_mask(e_right)),
+            ("gbs", edge_mask(e_left) + edge_mask(e_right)),
+            ("gto", edge_silk(e_left) + edge_silk(e_right)),
+        ]:
+            files[FILE_NAMES[layer_key]] = files[FILE_NAMES[layer_key]].replace(
+                "M02*", layer_content + "M02*")
+
+        files[FILE_NAMES["drl"]] = files[FILE_NAMES["drl"]].replace(
+            "T1C0.300\n%", "T1C0.300\nT2C0.600\n%")
+        files[FILE_NAMES["drl"]] = files[FILE_NAMES["drl"]].rstrip()
+        if files[FILE_NAMES["drl"]].endswith("M30"):
+            files[FILE_NAMES["drl"]] = files[FILE_NAMES["drl"]][:-4].rstrip()
+        files[FILE_NAMES["drl"]] += "\n" + edge_drill(all_vias) + "\nM30\n"
+        # DI/DO-Edge-Via Keepout: Bottom-Rails starten bei 1.5mm statt 0.15mm
+        import re as _re_gbl
+        files[FILE_NAMES["gbl"]] = _re_gbl.sub(
+            r'X150000Y(\d+)D02\*\n',
+            r'X1500000Y\1D02*\n',
+            files[FILE_NAMES["gbl"]])
 
     # ZIP erzeugen
     out_path = Path(output)
@@ -140,6 +175,7 @@ def generate(
         print()
         try:
             render_zip(str(out_path), dpmm=preview_dpmm)
+            # trace_nets(str(out_path), dpmm=preview_dpmm)   -- später
         except Exception as e:
             print(f"[WARNUNG] Preview fehlgeschlagen: {e}")
 
