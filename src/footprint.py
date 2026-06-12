@@ -224,7 +224,8 @@ def pad_pos(
 # ---------------------------------------------------------------------------
 
 def via_pad_x(
-    led_x: float, led_y: float, rotation: float, signal: str
+    led_x: float, led_y: float, rotation: float, signal: str,
+    fp: "Footprint | None" = None,
 ) -> float:
     """
     Absolute X-Koordinate der Via fuer VDD oder GND.
@@ -232,35 +233,46 @@ def via_pad_x(
     Die Via liegt auf derselben X-Koordinate wie das jeweilige Pad
     (direkt senkrecht darueber/darunter).
     """
-    _PAD_X = {"VDD": PAD_XR, "GND": PAD_XL}
-    lx = _PAD_X[signal]
+    lx = _pad_x(fp, signal)
     rx, _ = rotate_xy(lx, 0.0, rotation)
     return led_x + rx
+
+
+def _pad_x(fp: "Footprint | None", signal: str) -> float:
+    """X-Offset des Pads im Footprint (oder SK9822-Default)."""
+    if fp is not None:
+        try:
+            return get_pad(fp, signal).x
+        except KeyError:
+            pass
+    return {"VDD": PAD_XR, "GND": PAD_XL}[signal]
 
 
 def via_pos(
     led_x: float, led_y: float, rotation: float, signal: str,
     pitch: float = 5.0,
+    fp: "Footprint | None" = None,
 ) -> Tuple[float, float]:
     """
     Absolute Position der Power-Via fuer VDD oder GND.
 
     Via liegt auf gleicher X wie das Pad, Y auf der Stromschiene.
     Position = max(Bus-Mitte, sichere Drill-Distanz vom Pad).
-
-    JLCPCB: Drill-Kante >= 0.25mm von fremdem Pad-Kupfer (VIA_DRILL_CLEAR).
-    Nach 90/270-Rotation liegt PAD_W (0.875mm) in Y-Richtung:
-      pad_outer = |pad_center_y| + PAD_W/2
-      safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL/2
     """
     from design_rules import CLEARANCE, bus_width, VIA_DRILL, VIA_DRILL_CLEAR
 
-    vx = via_pad_x(led_x, led_y, rotation, signal)
+    vx = via_pad_x(led_x, led_y, rotation, signal, fp=fp)
 
-    _PAD_X = {"VDD": PAD_XR, "GND": PAD_XL}
-    lx = _PAD_X[signal]
+    lx = _pad_x(fp, signal)
     _, pad_ry = rotate_xy(lx, 0.0, rotation)
     sign = +1 if pad_ry > 0 else -1
+
+    pw = PAD_W
+    if fp is not None:
+        try:
+            pw = get_pad(fp, signal).width
+        except KeyError:
+            pass
 
     # Nominale Bus-Mitte
     w = bus_width(pitch)
@@ -269,7 +281,7 @@ def via_pos(
     # Sichere Mindestdistanz: Drill darf Pad-Kupfer nicht beruehren
     # + 0.15mm extra Abstand (Fertigungstoleranz)
     # + 0.01mm Puffer gegen Floating-Point-Grenzfaelle
-    pad_outer = abs(pad_ry) + PAD_W / 2
+    pad_outer = abs(pad_ry) + pw / 2
     safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL / 2 + 0.15 + 0.01
 
     vy = led_y + sign * max(nominal, safe_min)
