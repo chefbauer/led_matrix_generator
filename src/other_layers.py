@@ -1,4 +1,4 @@
-"""
+﻿"""
 Gerber-Generator fuer die verbleibenden Lagen:
   - Top Solder Mask (GTS): Oeffnungen ueber allen Top-Pads und Via-Pads
   - Bottom Solder Mask (GBS): Oeffnungen ueber Via-Pads auf Bottom
@@ -17,19 +17,19 @@ import design_rules as DR
 
 
 # Solder-Mask-Expansion in mm (pro Seite)
-SM_EXP = DR.CLEARANCE   # 0.05 wäre Standard; wir nehmen CLEARANCE = 0.15 als Expansion
+SM_EXP = DR.CLEARANCE   # 0.05 wÃ¤re Standard; wir nehmen CLEARANCE = 0.15 als Expansion
 
 # Via-Parameter
 VIA_DRILL = DR.VIA_DRILL
 VIA_PAD_D = DR.VIA_PAD_D
 
 
-def _via_list(leds: List[LedInstance], pitch: float = 5.0):
+def _via_list(leds: List[LedInstance], fp: Footprint = SK9822_EC20, pitch: float = 5.0):
     """Alle Via-Positionen als Liste von (x, y) Tupeln."""
     result = []
     for led in leds:
         for sig in ("VDD", "GND"):
-            result.append(via_pos(led.x, led.y, led.rotation, sig, pitch))
+            result.append(via_pos(led.x, led.y, led.rotation, sig, pitch, fp=fp))
     return result
 
 
@@ -54,7 +54,7 @@ def build_top_soldermask(
             px, py = pad_pos(led.x, led.y, led.rotation, p)
             g.flash(ap, px, py)
 
-    for vx, vy in _via_list(leds, pitch):
+    for vx, vy in _via_list(leds, fp, pitch):
         g.flash(via_ap, vx, vy)
 
     # Busbar VDD-Vias + VDD-Kupferflaeche + Connector-Pads (Top)
@@ -119,7 +119,7 @@ def build_bottom_soldermask(
     g = GerberWriter("Bottom Solder Mask (GBS)")
     via_ap = g.add_aperture(ApertureShape.CIRCLE, VIA_PAD_D + 2 * SM_EXP)
 
-    for vx, vy in _via_list(leds, pitch):
+    for vx, vy in _via_list(leds, fp, pitch):
         g.flash(via_ap, vx, vy)
 
     # GND-Busbar Freilegung (nur GND-Bereich auf Bottom; VDD-Busbar ist auf Top)
@@ -196,7 +196,7 @@ def build_drill(
     lines.append("T1")
     lines.append("G05")
 
-    for vx, vy in _via_list(leds, pitch):
+    for vx, vy in _via_list(leds, fp, pitch):
         xi = round(vx * 1000)
         yi = round(vy * 1000)
         lines.append(f"X{xi:+07d}Y{yi:+07d}")
@@ -256,3 +256,4 @@ def build_drill(
 
     lines.append("M30")
     return "\n".join(lines) + "\n"
+

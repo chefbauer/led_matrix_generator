@@ -118,7 +118,7 @@ def build_top_copper(
     pitch = pitch  # aus Parameter
     for led in leds:
         for sig in ("VDD", "GND"):
-            vx, vy = via_pos(led.x, led.y, led.rotation, sig, pitch)
+            vx, vy = via_pos(led.x, led.y, led.rotation, sig, pitch, fp=fp)
             px, py = pad_pos(led.x, led.y, led.rotation, get_pad(fp, sig))
             g.flash(via_ap, vx, vy)
             # Stichleitung: senkrecht vom Pad bis zur Via (gleiche X)
@@ -173,8 +173,8 @@ def build_top_copper(
         for row_idx in sorted(rows_vdd.keys()):
             row_leds_v = rows_vdd[row_idx]
             first_v    = min(row_leds_v, key=lambda l: l.index)
-            _, via_y_v = via_pos(first_v.x, first_v.y, first_v.rotation, "VDD", pitch)
-            x_right_v  = max(via_pos(l.x, l.y, l.rotation, "VDD", pitch)[0]
+            _, via_y_v = via_pos(first_v.x, first_v.y, first_v.rotation, "VDD", pitch, fp=fp)
+            x_right_v  = max(via_pos(l.x, l.y, l.rotation, "VDD", pitch, fp=fp)[0]
                              for l in row_leds_v)
             g.draw(vdd_h_ap, bb_x, via_y_v, x_right_v, via_y_v)
 

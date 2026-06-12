@@ -33,6 +33,7 @@ def busbar_vdd_via_positions(
     leds: List[LedInstance],
     pitch: float,
     x_offset: float,
+    fp: Footprint = SK9822_EC20,
 ) -> list:
     """
     Eine VDD-Via pro Reihe an der rechten Kante der Busbar-Zone.
@@ -51,7 +52,7 @@ def busbar_vdd_via_positions(
     result = []
     for row_idx in sorted(rows.keys()):
         first = rows[row_idx][0]
-        _, vy = fp_via_pos(first.x, first.y, first.rotation, "VDD", pitch)
+        _, vy = fp_via_pos(first.x, first.y, first.rotation, "VDD", pitch, fp=fp)
         result.append((via_x, vy))
         # Zweites Via: oberhalb bei geraden Reihen, unterhalb bei ungeraden
         offset = +0.5 if row_idx % 2 == 0 else -0.5
@@ -96,7 +97,7 @@ def build_bottom_copper(
             via_xs = []
             via_ys = []
             for led in row_leds:
-                vx, vy = fp_via_pos(led.x, led.y, led.rotation, sig, pitch)
+                vx, vy = fp_via_pos(led.x, led.y, led.rotation, sig, pitch, fp=fp)
                 via_xs.append(vx)
                 via_ys.append(vy)
 

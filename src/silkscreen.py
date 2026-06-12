@@ -152,8 +152,8 @@ def build_top_silkscreen(
         first     = min(row_leds, key=lambda l: l.index)
 
         di_abs  = pad_pos(first.x, first.y, first.rotation, get_pad(fp, "DI"))
-        vdd_abs = via_pos(first.x, first.y, first.rotation, "VDD", pitch)
-        gnd_abs = via_pos(first.x, first.y, first.rotation, "GND", pitch)
+        vdd_abs = via_pos(first.x, first.y, first.rotation, "VDD", pitch, fp=fp)
+        gnd_abs = via_pos(first.x, first.y, first.rotation, "GND", pitch, fp=fp)
 
         going_right = (first.rotation == 270.0)
 

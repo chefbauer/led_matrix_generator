@@ -169,6 +169,25 @@ def _draw_drill_on_image(
 
 # -- pin-1 markers -----------------------------------------------------------
 
+def _detect_pin1_offset(gtl: bytes | None, gko: bytes | None) -> tuple[float, float]:
+    """Return (do_x, do_y) — local DO pad offset before rotation."""
+    import json as _json
+    workspace = Path(__file__).parent.parent
+    data_dir = workspace / "data"
+    if data_dir.is_dir():
+        for lcsc_dir in sorted(data_dir.iterdir()):
+            fp_path = lcsc_dir / "footprint.json"
+            if fp_path.exists():
+                try:
+                    fp = _json.loads(fp_path.read_text(encoding="utf-8"))
+                    for p in fp.get("pads", []):
+                        if p.get("signal") == "DO":
+                            return (p["x"], -p["y"])
+                except Exception:
+                    continue
+    return (-0.707, 0.800)  # SK9822-EC20 default
+
+
 def _parse_cpl(csv_data: bytes) -> list[tuple[float, float, float]] | None:
     """Parse CPL CSV, return [(x_mm, y_mm, rotation_deg), ...] for each LED."""
     try:
@@ -199,11 +218,11 @@ def _draw_pin1_markers(
     global_min_x: float,
     global_min_y: float,
     dpmm: int,
-    body_w: float = 2.0,
-    body_h: float = 2.0,
+    do_x: float = -0.707,
+    do_y: float = +0.800,
     colour: tuple[int, int, int, int] = (255, 0, 0, 255),
 ) -> None:
-    """Draw a small red dot at each LED's pin-1 corner (in-place)."""
+    """Draw a small red dot at each LED's pin-1 (DO) pad position."""
     if not cpl_data:
         return
     leds = _parse_cpl(cpl_data)
@@ -212,15 +231,14 @@ def _draw_pin1_markers(
     import math
     from PIL import ImageDraw
     draw = ImageDraw.Draw(img)
-    r = max(2, int(0.18 * dpmm))   # 0.18 mm radius
+    r = max(2, int(0.21 * dpmm))
     for cx, cy, rot in leds:
         rad = math.radians(rot)
         c, s = math.cos(rad), math.sin(rad)
-        lx, ly = -body_w / 2, +body_h / 2
-        px = cx + (lx * c - ly * s)
-        py = cy + (lx * s + ly * c)
+        px = cx + (do_x * c - do_y * s)
+        py = cy + (do_x * s + do_y * c)
         ix = round((px - global_min_x) * dpmm)
-        iy = round((py - global_min_y) * dpmm)
+        iy = img.size[1] - 1 - round((py - global_min_y) * dpmm)
         draw.ellipse((ix - r, iy - r, ix + r, iy + r), fill=colour)
 
 
@@ -351,6 +369,9 @@ def render_zip(
     gmin_x = _math2.floor(gmin_x * effective_dpmm) / effective_dpmm
     gmin_y = _math2.floor(gmin_y * effective_dpmm) / effective_dpmm
 
+    # auto-detect DO pad position from Gerber or footprint data
+    do_x, do_y = _detect_pin1_offset(gtl, gko)
+
     stem       = zp.stem
     front_path = out / f"{stem}_front.png"
     back_path  = out / f"{stem}_back.png"
@@ -370,7 +391,8 @@ def render_zip(
     ], bg_rgba=(25, 90, 25, 255), dpmm=effective_dpmm, drill_data=drl)
 
     if front:
-        _draw_pin1_markers(front, cpl, gmin_x, gmin_y, effective_dpmm)
+        _draw_pin1_markers(front, cpl, gmin_x, gmin_y, effective_dpmm,
+                           do_x=do_x, do_y=do_y)
         if border_mm > 0:
             _add_solid_border(front, border_mm, effective_dpmm)
         final = front.convert("RGB")
@@ -388,7 +410,8 @@ def render_zip(
     ], bg_rgba=(20, 75, 20, 255), dpmm=effective_dpmm, drill_data=drl)
 
     if back:
-        _draw_pin1_markers(back, cpl, gmin_x, gmin_y, effective_dpmm)
+        _draw_pin1_markers(back, cpl, gmin_x, gmin_y, effective_dpmm,
+                           do_x=do_x, do_y=do_y)
         if border_mm > 0:
             _add_solid_border(back, border_mm, effective_dpmm)
         final = back.convert("RGB")
