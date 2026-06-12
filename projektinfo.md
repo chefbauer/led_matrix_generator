@@ -1,6 +1,243 @@
 # Projektinfo: LED-Matrix-Gerber-Generator
 
-## Aktueller Stand (2026-06-11)
+## Aktueller Stand (2026-06-12)
+
+Das Projekt ist funktionsfähig und erzeugt vollständige JLCPCB-kompatible Fertigungsdaten.
+**Jede LED, deren Daten per `fetch_component.py` geladen wurden, ist sofort verwendbar – kein Hardcoding nötig.**
+
+---
+
+## CLI
+
+```bash
+# Board erzeugen (Config-Datei)
+python3 src/generate.py --config cfg/SK9822_5x4.cfg
+
+# PNG-Vorschau rendern (Vorder- und Rückseite)
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 20
+
+# Neue LED laden (einmalig)
+python3 src/fetch_component.py C41413180
+```
+
+Config-Parameter (`cfg/*.cfg`):
+
+| Parameter | Bedeutung |
+|---|---|
+| `cols` / `rows` | Matrixgröße |
+| `pitch` | Abstand Mitte-zu-Mitte in mm |
+| `margin` | Rand (`0` = `pitch/2`) |
+| `busbar` | `0` = keine, `1` = links |
+| `led_current_ma` | mA pro LED (für Busbar-Berechnung) |
+| `copper_oz` | Kupfergewicht (1 oder 2) |
+| `jlcpcb_part` | LCSC-Teilenummer, z. B. `C2909059` |
+
+---
+
+## Erzeugte Ausgabedateien (ZIP)
+
+| Datei | Inhalt |
+|---|---|
+| `matrix-F_Cu.gtl` | Top Copper: LED-Pads, Datenkette (DI/DO, CI/CO), Via-Stichleitungen, VDD-Busbar-Fläche, Connector-Pads |
+| `matrix-B_Cu.gbl` | Bottom Copper: VDD/GND-Stromschienen, Via-Pads, GND-Busbar-Kupferfläche, Anschluss-Lötpads |
+| `matrix-F_Mask.gts` | Top Solder Mask: Öffnungen über allen Top-Pads, Vias, Connector-Pads und VDD-Fläche |
+| `matrix-B_Mask.gbs` | Bottom Solder Mask: Öffnungen über Via-Pads und GND-Busbar-Fläche |
+| `matrix-F_SilkS.gto` | Top Silkscreen: Richtungspfeile, Reihen-Labels (D/C/+/−), Connector-Beschriftung (DAT/CLK/+5V/GND) |
+| `matrix-Edge_Cuts.gko` | Board Outline: Rechteck |
+| `matrix.drl` | Excellon Drill: Via-Bohrungen |
+| `BOM.csv` | Bill of Materials im JLCPCB-Format |
+| `CPL.csv` | Component Placement List im JLCPCB-Format |
+
+---
+
+## Quelldateien
+
+### `src/generate.py`
+
+Hauptskript. Assembliert alle Layer, lädt Komponentendaten, erzeugt ZIP.
+
+- **Kein JLCPCB_PARTS-Dict mehr** – Footprint wird direkt per LCSC-ID aus `data/{lcsc_id}/footprint.json` geladen
+- Parameter `lcsc_id` statt `fp_name`; CLI-Flag `--lcsc`
+
+### `src/fetch_component.py`
+
+Lädt Bauteil-Daten von der EasyEDA-API (`easyeda.com/api/products/{lcsc_id}/components`), kein Login erforderlich.
+
+Parst automatisch:
+- Pad-Koordinaten + Signalnamen aus Schaltzeichen (Alias: `SDO`→`DO`, `CKL`→`CI`, `CKO`→`CO`, `SDI`→`DI`)
+- Origin aus Canvas-String (Index 16/17)
+- EasyEDA-Einheit: 1 unit = 0.254 mm
+
+### `src/footprint.py`
+
+Footprint-Definitionen.
+
+- `SK9822_EC20` – statischer Referenz-Footprint (SK9822-EC20, 6-Pad, 2×2 mm)
+- `footprint_from_data(lcsc_id)` – **dynamischer Loader**: lädt jeden Footprint aus `data/{lcsc_id}/footprint.json`, inkl. Y-Flip (EasyEDA Screen → Gerber Math), automatische Gehäusegrösse aus Pad-Ausdehnung
+- `has_pad(fp, signal)` – prüft ob ein Signal im Footprint vorhanden ist (robustheit für 4-Pad vs. 6-Pad LEDs)
+- `get_pad()`, `pad_pos()`, `via_pos()`, `rotate_xy()`
+
+**SK9822-EC20 Pad-Layout (6-Pad, 2 Spalten × 3 Reihen):**
+
+```
+         links (-0.707 mm)   rechts (+0.707 mm)
+oben   (+0.800 mm):  DO          CO
+mitte  (+0.000 mm):  GND         VDD
+unten  (-0.800 mm):  DI          CI
+```
+
+**XL-1615RGBC-2812B-S Pad-Layout (4-Pad, WS2812-kompatibel):**
+
+```
+         links (-0.625 mm)   rechts (+0.625 mm)
+oben   (-0.475 mm):  DO          VDD
+unten  (+0.475 mm):  GND         DI
+```
+
+Rotationslogik:
+- Gerade Reihen (→): `270° CCW` → DO rechts, DI links
+- Ungerade Reihen (←): `90° CCW` → DO links, DI rechts
+- LEDs ohne CLK (CI/CO fehlen): alle betroffenen Abschnitte werden übersprungen (`has_pad`-Guard)
+
+### `src/matrix.py`
+
+`LedInstance` – `index, ref, col, row, x, y, rotation, nets`
+
+`generate_matrix()`, `board_size()`, `_effective_margin()`
+
+### `src/gerber_writer.py`
+
+RS-274X-Writer. Format `%FSLAX46Y46*%`, 1 mm = 1.000.000 Einheiten.
+
+### `src/top_copper.py`
+
+Erzeugt GTL:
+1. LED-Pads (rotiert)
+2. Datenkette: DO→DI und CO→CI (mit H/V-Router); CLK nur wenn `has_pad(fp, "CO")`
+3. Power-Stichleitungen Via → Pad
+4. Busbar-Zone (wenn `busbar > 0`):
+   - VDD-Kupferfläche (RECT)
+   - Horizontale VDD-Verteilleitungen pro Reihe (0.6 mm)
+   - DAT-(+CLK-)Connector-Pads (1.2 mm oval) mit L-förmigem Routing zu D1
+   - +5V/GND Lötpads (2.4 mm oval)
+
+### `src/bottom_copper.py`
+
+Erzeugt GBL:
+- Pro Reihe: horizontale VDD/GND-Schienen (Breite = `pitch/2 − 2×CLEARANCE`)
+- Via-Pads
+- Busbar-Zone (wenn `busbar > 0`):
+  - GND-Kupferfläche (RECT, volle Board-Höhe)
+  - Busbar-VDD-Vias (eine pro Reihe)
+  - +5V/GND Lötpads (Bottom-Seite)
+
+Konstanten: `PAD_DIA_SIG = 1.2 mm`, `PAD_DIA_PWR = 2.4 mm`
+
+### `src/other_layers.py`
+
+- `build_top_soldermask()` – LED-Pads + Vias + VDD-Fläche + Connector-Pads + Lötpad-Öffnungen; CLK-Öffnungen nur wenn `has_pad`
+- `build_bottom_soldermask()` – Via-Öffnungen + GND-Busbar-Freilegung + Busbar-VDD-Via-Öffnungen; Parameter `x_offset` ergänzt
+- `build_board_outline()` – Rechteck
+- `build_drill()` – Excellon Drill
+
+### `src/silkscreen.py`
+
+Erzeugt GTO:
+1. Richtungspfeile `>` / `<` zwischen benachbarten LEDs
+2. Reihen-Beschriftung: `D`, `C` (nur wenn `has_pad(fp,"CI")`), `+`, `−`
+3. Connector-Beschriftung (wenn `busbar > 0`): `DAT`, `CLK` (optional), `+5V`, `GND`
+
+Vektorglyph-Zeichensatz: `+ - D C A T K L G N V 5 > <`
+
+### `src/render_preview.py`
+
+Erzeugt PNG-Vorschaubilder (Vorder- + Rückseite) aus dem generierten ZIP.
+
+Verwendet `pygerber` (v2.4.x) und `Pillow`. Layer werden als RGBA-Bilder gerendert und alpha-composited.
+
+```bash
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 20
+# → output/SK9822_5x4_front.png
+# → output/SK9822_5x4_back.png
+```
+
+### `src/bom.py` / `src/cpl.py` / `src/component_data.py`
+
+BOM und CPL im JLCPCB-Format. Laden Daten aus `data/{lcsc_id}/component.json`.
+
+---
+
+## Verzeichnisstruktur
+
+```
+led_matrix_generator/
+├── cfg/
+│   ├── SK9822_5x4.cfg         # 5×4 LED-Matrix, Busbar
+│   ├── SK9822_16x11.cfg       # 16×11, kein Busbar
+│   ├── SK9822_32x11.cfg       # 32×11, kein Busbar
+│   └── XL-1615RGBC_32x1.cfg  # 32×1 Streifen, 4-Pad WS2812
+├── src/
+│   ├── generate.py
+│   ├── render_preview.py      # NEU: PNG-Vorschau
+│   ├── fetch_component.py
+│   ├── component_data.py
+│   ├── footprint.py
+│   ├── matrix.py
+│   ├── gerber_writer.py
+│   ├── top_copper.py
+│   ├── bottom_copper.py
+│   ├── other_layers.py
+│   ├── silkscreen.py
+│   ├── bom.py
+│   ├── cpl.py
+│   └── router.py
+├── data/
+│   ├── C2909059/              # SK9822-EC20
+│   │   ├── component.json
+│   │   ├── footprint.json
+│   │   └── raw.json
+│   └── C41413180/             # XL-1615RGBC-2812B-S
+│       ├── component.json
+│       ├── footprint.json
+│       └── raw.json
+├── output/                    # erzeugte ZIPs + PNGs
+├── example/
+│   └── GERBER_VORGABE/        # Referenz-Gerber (Sprint-Layout Export)
+└── projektinfo.md
+```
+
+---
+
+## Bekannte Bauteile
+
+| LED | LCSC # | Package | Pads | CLK |
+|---|---|---|---|---|
+| SK9822-EC20 | C2909059 | LED-SMD_6P-L2.0-W2.0-P0.80-TL | 6 | ✓ |
+| XL-1615RGBC-2812B-S | C41413180 | LED-SMD_4P-L1.6-W1.5 | 4 | ✗ |
+
+---
+
+## Design Rules
+
+| Parameter | Wert |
+|---|---|
+| Daten-Trace | 0.15 mm |
+| Power-Stichleitung (Top) | 0.20 mm |
+| Stromschiene (Bottom) | `pitch/2 − 2×0.15` mm |
+| Via Pad-Ø | 0.50 mm |
+| Via Bohrung | 0.30 mm |
+| Clearance | 0.15 mm |
+| Min. Spacing | 0.30 mm |
+| Busbar Min-Breite | 5.0 mm |
+| Solder Mask Expansion | 0.15 mm (= CLEARANCE) |
+| Board Outline Linie | 0.05 mm |
+
+---
+
+## Ziel
+
+Direktgenerator für fertige JLCPCB-Produktionsdaten aus einer kompakten Konfigurationsdatei. Keine EDA-Software notwendig.
+
 
 Das Projekt ist funktionsfähig und erzeugt vollständige JLCPCB-kompatible Fertigungsdaten.
 
