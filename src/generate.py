@@ -33,6 +33,7 @@ from component_data import load_component
 from bom import build_bom
 from cpl import build_cpl
 from silkscreen import build_top_silkscreen
+from render_preview import render_zip
 
 
 # JLCPCB-Dateinamen-Konvention
@@ -62,6 +63,8 @@ def generate(
     busbar: int = 0,
     led_current_ma: float = 15.0,
     copper_oz: float = 1.0,
+    preview: bool = True,
+    preview_dpmm: int = 60,
 ):
     import design_rules as DR
     fp = footprint_from_data(lcsc_id)
@@ -131,6 +134,15 @@ def generate(
 
     print()
     print(f"ZIP geschrieben: {out_path}  ({out_path.stat().st_size} Bytes)")
+
+    # Automatische PNG-Vorschau
+    if preview:
+        print()
+        try:
+            render_zip(str(out_path), dpmm=preview_dpmm)
+        except Exception as e:
+            print(f"[WARNUNG] Preview fehlgeschlagen: {e}")
+
     return out_path
 
 
@@ -145,6 +157,10 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str,   default=None)
     parser.add_argument("--lcsc",   type=str,   default=None,
                         help="JLCPCB-Teilenummer, z.B. C2909059")
+    parser.add_argument("--no-preview", action="store_true",
+                        help="Keine PNG-Vorschau rendern")
+    parser.add_argument("--dpmm",   type=int,   default=60,
+                        help="Pixel pro mm fuer Vorschau (Standard: 60)")
     args = parser.parse_args()
 
     # Defaults
@@ -201,4 +217,6 @@ if __name__ == "__main__":
         busbar=cfg_busbar,
         led_current_ma=cfg_led_current,
         copper_oz=cfg_copper_oz,
+        preview=not args.no_preview,
+        preview_dpmm=args.dpmm,
     )
