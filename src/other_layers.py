@@ -129,7 +129,7 @@ def build_bottom_soldermask(
         bb_vias    = busbar_vdd_via_positions(leds, pitch, x_offset)
         via_x      = bb_vias[0][0]
         pour_left  = DR.CLEARANCE
-        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.CLEARANCE
+        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.MIN_SPACING
         pour_w     = pour_right - pour_left
         gnd_cx     = (pour_left + pour_right) / 2
         pour_h     = board_height - 2 * DR.CLEARANCE
@@ -242,7 +242,7 @@ def build_drill(
 
         bb_vias   = busbar_vdd_via_positions(leds, pitch, x_offset)
         via_x     = bb_vias[0][0]
-        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.CLEARANCE
+        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.MIN_SPACING
         pwr_x1 = DR.CLEARANCE + PAD_DIA_PWR / 2
         pwr_x2 = pour_right - PAD_DIA_PWR / 2
         pwr_cx = (pwr_x1 + pwr_x2) / 2

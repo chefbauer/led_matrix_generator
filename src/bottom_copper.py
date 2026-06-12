@@ -53,6 +53,9 @@ def busbar_vdd_via_positions(
         first = rows[row_idx][0]
         _, vy = fp_via_pos(first.x, first.y, first.rotation, "VDD", pitch)
         result.append((via_x, vy))
+        # Zweites Via: oberhalb bei geraden Reihen, unterhalb bei ungeraden
+        offset = +0.5 if row_idx % 2 == 0 else -0.5
+        result.append((via_x, vy + offset))
     return result
 
 
@@ -105,9 +108,9 @@ def build_bottom_copper(
                 # GND: Schiene laeuft bis ganz links (Boardrand + Clearance)
                 x_min = DR.CLEARANCE
             elif busbar > 0 and sig == "VDD":
-                # VDD: Schiene endet am Busbar-VDD-Via
+                # VDD: Schiene startet rechts vom Busbar-VDD-Via
                 bb_via_x = x_offset - DR.CLEARANCE - BUSBAR_VDD_VIA_PAD / 2
-                x_min = bb_via_x
+                x_min = bb_via_x + BUSBAR_VDD_VIA_PAD / 2 + DR.CLEARANCE + w / 2 - 0.7
             else:
                 x_min = min(via_xs) - w / 2
 
@@ -129,7 +132,7 @@ def build_bottom_copper(
     if busbar > 0 and board_height > 0:
         via_x      = bb_vias[0][0]            # Busbar-VDD-Via X (alle gleich)
         pour_left  = DR.CLEARANCE
-        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.CLEARANCE
+        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.MIN_SPACING
         pour_w     = pour_right - pour_left
         gnd_cx     = (pour_left + pour_right) / 2
         pour_h     = board_height - 2 * DR.CLEARANCE
