@@ -1,5 +1,85 @@
 # LED Matrix Generator
 
+> Direkt-Generator für JLCPCB-Fertigungsdaten aus Config-Dateien.  
+> Keine EDA-Software nötig.
+
+## Quickstart
+
+```bash
+# In einem Rutsch: Gerber + PNGs + Netz-Traces
+python3 src/generate.py --config cfg/SK9822_5x4.cfg
+
+# Nur Gerber
+python3 src/generate.py --config cfg/SK9822_5x4.cfg --no-preview
+
+# Neue LED laden (einmalig)
+python3 src/fetch_component.py C41413180
+```
+
+## Features
+
+| Feature | Status |
+|---|---|
+| **6-Pin SPI-LED** (SK9822, 2x2mm) | ✅ inkl. CLK-Routing, Busbar |
+| **4-Pin WS2812-LED** (XL-1615RGBC) | ✅ mit H-45-H Datenrouting |
+| **Busbar** (links, Top/Bottom) | ✅ GND/VDD Kupferflächen, Connector-Pads |
+| **Edge-Connector** (Halb-Löcher) | ✅ für 4-Pin busbar=0: GND/DI/VCC + GND/DO/VCC |
+| **Serpentinen-Matrix** | ✅ 270°/90° Rotation, H/V/45° Router |
+| **Drill (3 Werkzeuge)** | ✅ T1=0.30 Vias, T2=0.80 DAT/CLK, T3=1.00 +5V/GND |
+| **Auto-Preview** | ✅ PNG Vorder-/Rückseite bei jedem `generate` |
+| **Netz-Tracer** | ✅ `trace_net.py`: VCC/GND Kupferflächen visualisieren |
+| **Pin-1-Marker** | ✅ roter Punkt am DO-Pad im Render |
+| **Solder Mask** | ✅ 0.05 mm Expansion (JLCPCB-Standard) |
+| **Design Rules** | ✅ TRACE_DATA 0.20 mm, TRACE_POWER 0.30 mm, CLEARANCE 0.15 mm |
+
+## Ausgabe (ZIP)
+
+| Datei | Inhalt |
+|---|---|
+| `matrix-F_Cu.gtl` | Top Copper: Pads, Datenkette, Power-Stichleitungen, Edge-Connector |
+| `matrix-B_Cu.gbl` | Bottom Copper: VDD/GND-Schienen, Via-Pads, Edge-Connector-Stubs |
+| `matrix-F_Mask.gts` | Top Solder Mask |
+| `matrix-B_Mask.gbs` | Bottom Solder Mask |
+| `matrix-F_SilkS.gto` | Top Silkscreen |
+| `matrix-Edge_Cuts.gko` | Board Outline |
+| `matrix.drl` | Excellon Drill |
+| `BOM.csv` | Bill of Materials |
+| `CPL.csv` | Component Placement List |
+
+## Config-Parameter (`cfg/*.cfg`)
+
+| Parameter | Bedeutung |
+|---|---|
+| `cols` / `rows` | Matrixgröße |
+| `pitch` | Abstand Mitte-zu-Mitte in mm |
+| `margin` | Rand (`0` = `pitch/2`) |
+| `busbar` | `0` = keine, `1` = links |
+| `led_current_ma` | mA pro LED |
+| `copper_oz` | Kupfergewicht (1 oder 2) |
+| `jlcpcb_part` | LCSC-Teilenummer |
+
+## Unterstützte LEDs
+
+| LED | LCSC # | Pads | CLK |
+|---|---|---|---|
+| SK9822-EC20 | C2909059 | 6 | ✅ |
+| XL-1615RGBC-2812B-S | C41413180 | 4 | ❌ |
+
+## Weitere Tools
+
+```bash
+# Netz-Tracer (Kurzschluss-Prüfung)
+python3 src/trace_net.py output/SK9822_5x4.zip --dpmm 100
+# → *_vcc.png + *_gnd.png
+
+# PNG-Vorschau (manuell)
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 100
+```
+
+## Koordinatensystem
+
+Siehe [`koordinatensysteme.md`](koordinatensysteme.md) — vollständige Dokumentation aller verwendeten Koordinatensysteme (Gerber RS-274X, EasyEDA, pygerber, Footprint).
+
 Es gibt viele fertige LED-Matrizen zu kaufen – aber irgendwas ist immer:
 zu gross, zu klein, falsches Seitenverhaeltnis, nicht kuerzbar, nicht erweiterbar.
 Wer eine Matrix in genau der richtigen Groesse braucht, hat meist keine gute Option.
