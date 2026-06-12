@@ -27,6 +27,32 @@ import design_rules as DR
 TRACE_DATA  = DR.TRACE_DATA    # 0.15 mm
 TRACE_POWER = DR.TRACE_POWER   # 0.20 mm
 
+CUT_PAD_W = 1.0   # Trennpad-Breite  [mm]
+CUT_PAD_H = 3.0   # Trennpad-Hoehe   [mm]
+
+
+def cut_pad_positions(leds: List[LedInstance], fp: Footprint) -> list:
+    """(x,y)-Mittelpunkte der Trennpads bei 4-Pin-Reihenueebergaengen."""
+    if has_pad(fp, "CO"):
+        return []
+    by_index = {led.index: led for led in leds}
+    do_pad = get_pad(fp, "DO")
+    di_pad = get_pad(fp, "DI")
+    result = []
+    for led in leds:
+        next_led = by_index.get(led.index + 1)
+        if next_led is None or led.row == next_led.row:
+            continue
+        x1, y1 = pad_pos(led.x, led.y, led.rotation, do_pad)
+        x2, y2 = pad_pos(next_led.x, next_led.y, next_led.rotation, di_pad)
+        if abs(x1 - x2) >= 0.01:
+            continue
+        offset_sign = +1.0 if led.rotation == 270.0 else -1.0
+        x_mid = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
+        y_mid = (y1 + y2) / 2
+        result.append((x_mid, y_mid))
+    return result
+
 
 def _power_pad_obstacles(led, fp) -> list:
     """Erzeugt Hindernis-Rechtecke fuer GND/VDD-Pads einer LED."""
@@ -59,9 +85,16 @@ def build_top_copper(
     trace_d  = g.add_aperture(ApertureShape.CIRCLE, TRACE_DATA)
     trace_p  = g.add_aperture(ApertureShape.CIRCLE, TRACE_POWER)
     via_ap   = g.add_aperture(ApertureShape.CIRCLE, 0.50)
+    cut_ap   = g.add_aperture(ApertureShape.RECT, CUT_PAD_W, CUT_PAD_H)
 
     def _pad_ap(rotation: float) -> int:
         return pad_ap_90 if rotation % 180 != 0 else pad_ap_0
+
+    # -------------------------------------------------------------------
+    # 0. Trennpads flashen (4-Pin: Mitte jedes Reihen-Uebergangs-Traces)
+    # -------------------------------------------------------------------
+    for cx, cy in cut_pad_positions(leds, fp):
+        g.flash(cut_ap, cx, cy)
 
     # -------------------------------------------------------------------
     # 1. LED-Pads flashen (rotierte Positionen, rotiertes Aperture)
