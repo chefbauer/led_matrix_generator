@@ -167,6 +167,65 @@ def _draw_drill_on_image(
             )
 
 
+# -- pin-1 markers -----------------------------------------------------------
+
+def _parse_cpl(csv_data: bytes) -> list[tuple[float, float, float]] | None:
+    """Parse CPL CSV, return [(x_mm, y_mm, rotation_deg), ...] for each LED."""
+    try:
+        text = csv_data.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    leds: list[tuple[float, float, float]] = []
+    for line in text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("Designator"):
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 5:
+            continue
+        try:
+            x = float(parts[1].replace("mm", ""))
+            y = float(parts[2].replace("mm", ""))
+            r = float(parts[4])
+            leds.append((x, y, r))
+        except (ValueError, IndexError):
+            continue
+    return leds if leds else None
+
+
+def _draw_pin1_markers(
+    img: Image.Image,
+    cpl_data: bytes | None,
+    global_min_x: float,
+    global_min_y: float,
+    dpmm: int,
+    body_w: float = 2.0,
+    body_h: float = 2.0,
+    colour: tuple[int, int, int, int] = (255, 0, 0, 255),
+) -> None:
+    """Draw a small red dot at each LED's pin-1 corner (in-place)."""
+    if not cpl_data:
+        return
+    leds = _parse_cpl(cpl_data)
+    if not leds:
+        return
+    import math
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    r = max(2, int(0.18 * dpmm))   # 0.18 mm radius
+    for cx, cy, rot in leds:
+        rad = math.radians(rot)
+        c, s = math.cos(rad), math.sin(rad)
+        lx, ly = -body_w / 2, +body_h / 2
+        px = cx + (lx * c - ly * s)
+        py = cy + (lx * s + ly * c)
+        ix = round((px - global_min_x) * dpmm)
+        iy = round((py - global_min_y) * dpmm)
+        draw.ellipse((ix - r, iy - r, ix + r, iy + r), fill=colour)
+
+
+# -- rendering ---------------------------------------------------------------
+
 def _parse_and_render(
     source: bytes, ftype: FileTypeEnum, scheme: ColorScheme, dpmm: int,
 ) -> tuple[Image.Image | None, GerberFileInfo | None]:
@@ -275,9 +334,22 @@ def render_zip(
         gto = read("F_SilkS",   "SilkS", ".gto")
         gko = read("Edge_Cuts", ".gko")
         drl = read(".drl")
+        cpl = read("CPL",       ".csv")
 
     bw, bh = _board_extent_mm(gko, gtl, gbl)
     effective_dpmm = _calc_dpmm(dpmm, scale, min_size, bw, bh)
+
+    # global bbox for pin1 marker coordinate mapping
+    ginfo = (GerberFile.from_str(gko.decode("utf-8"), FileTypeEnum.EDGE)
+             .parse().get_info() if gko else
+             GerberFile.from_str(gtl.decode("utf-8"), FileTypeEnum.COPPER)
+             .parse().get_info() if gtl else None)
+    gmin_x = float(ginfo.min_x_mm) if ginfo else 0.0
+    gmin_y = float(ginfo.min_y_mm) if ginfo else 0.0
+    # snap to pixel grid (same as _composite)
+    import math as _math2
+    gmin_x = _math2.floor(gmin_x * effective_dpmm) / effective_dpmm
+    gmin_y = _math2.floor(gmin_y * effective_dpmm) / effective_dpmm
 
     stem       = zp.stem
     front_path = out / f"{stem}_front.png"
@@ -298,6 +370,7 @@ def render_zip(
     ], bg_rgba=(25, 90, 25, 255), dpmm=effective_dpmm, drill_data=drl)
 
     if front:
+        _draw_pin1_markers(front, cpl, gmin_x, gmin_y, effective_dpmm)
         if border_mm > 0:
             _add_solid_border(front, border_mm, effective_dpmm)
         final = front.convert("RGB")
@@ -315,6 +388,7 @@ def render_zip(
     ], bg_rgba=(20, 75, 20, 255), dpmm=effective_dpmm, drill_data=drl)
 
     if back:
+        _draw_pin1_markers(back, cpl, gmin_x, gmin_y, effective_dpmm)
         if border_mm > 0:
             _add_solid_border(back, border_mm, effective_dpmm)
         final = back.convert("RGB")
