@@ -27,8 +27,8 @@ import design_rules as DR
 TRACE_DATA  = DR.TRACE_DATA    # 0.15 mm
 TRACE_POWER = DR.TRACE_POWER   # 0.20 mm
 
-CUT_PAD_W = 1.0   # Trennpad-Breite  [mm]
-CUT_PAD_H = 3.0   # Trennpad-Hoehe   [mm]
+CUT_PAD_W = 0.5   # Trennpad-Breite  [mm]
+CUT_PAD_H = 2.0   # Trennpad-Hoehe   [mm]
 
 
 def cut_pad_positions(leds: List[LedInstance], fp: Footprint) -> list:
@@ -48,7 +48,7 @@ def cut_pad_positions(leds: List[LedInstance], fp: Footprint) -> list:
         if abs(x1 - x2) >= 0.01:
             continue
         offset_sign = +1.0 if led.rotation == 270.0 else -1.0
-        x_mid = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
+        x_mid = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING + 0.25)
         y_mid = (y1 + y2) / 2
         result.append((x_mid, y_mid))
     return result
@@ -130,7 +130,7 @@ def build_top_copper(
                 dat_path = [(x1, y1), (x_outer, y1), (x_outer, y2), (x2, y2)]
             else:
                 # Reihen-Uebergang: 4-Pin-45°-Route (schraeg raus, gerade, schraeg rein)
-                gap = DR.MIN_SPACING
+                gap = DR.MIN_SPACING + 0.25
                 x_mid = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + gap)
                 dx = abs(x_mid - x1)          # horizontaler Schritt = 45°-Laenge
                 sy = 1.0 if y2 < y1 else -1.0  # Fahrtrichtung in Y
