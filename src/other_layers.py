@@ -17,7 +17,7 @@ import design_rules as DR
 
 
 # Solder-Mask-Expansion in mm (pro Seite)
-SM_EXP = DR.CLEARANCE   # 0.05 wÃ¤re Standard; wir nehmen CLEARANCE = 0.15 als Expansion
+SM_EXP = 0.05   # JLCPCB-Standard
 
 # Via-Parameter
 VIA_DRILL = DR.VIA_DRILL
@@ -256,4 +256,5 @@ def build_drill(
 
     lines.append("M30")
     return "\n".join(lines) + "\n"
+
 

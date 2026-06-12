@@ -48,8 +48,8 @@ MIN_SPACING = 0.30   # mm: = 2 * CLEARANCE, Mindestabstand Leitungskante zu Leit
 # Leiterbahnbreiten
 # ---------------------------------------------------------------------------
 
-TRACE_DATA  = 0.15   # mm: Datensignale (DI/DO, CI/CO)
-TRACE_POWER = 0.20   # mm: Power-Stichleitung Top-Layer (Via -> Pad)
+TRACE_DATA  = 0.20   # mm: Datensignale (DI/DO, CI/CO)
+TRACE_POWER = 0.30   # mm: Power-Stichleitung Top-Layer (Via -> Pad)
 
 
 # ---------------------------------------------------------------------------

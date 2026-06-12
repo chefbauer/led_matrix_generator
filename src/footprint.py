@@ -233,19 +233,26 @@ def via_pad_x(
     Die Via liegt auf derselben X-Koordinate wie das jeweilige Pad
     (direkt senkrecht darueber/darunter).
     """
-    lx = _pad_x(fp, signal)
-    rx, _ = rotate_xy(lx, 0.0, rotation)
+    lx, ly = _pad_xy(fp, signal)
+    rx, _ = rotate_xy(lx, ly, rotation)
     return led_x + rx
 
 
 def _pad_x(fp: "Footprint | None", signal: str) -> float:
     """X-Offset des Pads im Footprint (oder SK9822-Default)."""
+    return _pad_xy(fp, signal)[0]
+
+
+def _pad_xy(fp: "Footprint | None", signal: str) -> Tuple[float, float]:
+    """(x,y)-Offset des Pads im Footprint (oder SK9822-Default)."""
     if fp is not None:
         try:
-            return get_pad(fp, signal).x
+            pad = get_pad(fp, signal)
+            return (pad.x, pad.y)
         except KeyError:
             pass
-    return {"VDD": PAD_XR, "GND": PAD_XL}[signal]
+    default = {"VDD": (PAD_XR, 0.0), "GND": (PAD_XL, 0.0)}
+    return default[signal]
 
 
 def via_pos(
@@ -263,8 +270,8 @@ def via_pos(
 
     vx = via_pad_x(led_x, led_y, rotation, signal, fp=fp)
 
-    lx = _pad_x(fp, signal)
-    _, pad_ry = rotate_xy(lx, 0.0, rotation)
+    lx, ly = _pad_xy(fp, signal)
+    _, pad_ry = rotate_xy(lx, ly, rotation)
     sign = +1 if pad_ry > 0 else -1
 
     pw = PAD_W
