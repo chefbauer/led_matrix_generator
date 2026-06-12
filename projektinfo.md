@@ -5,6 +5,16 @@
 Das Projekt ist funktionsfähig und erzeugt vollständige JLCPCB-kompatible Fertigungsdaten.
 **Jede LED, deren Daten per `fetch_component.py` geladen wurden, ist sofort verwendbar – kein Hardcoding nötig.**
 
+**Neue Features (2026-06-12):**
+- **Edge-Connector** bei busbar=0: beidseitige Halb-Löcher (GND/DI/VCC + GND/DO/VCC) für 4-Pin WS2812-LEDs
+- **45°-Datenrouting** (H-45-H) für versetzt liegende Pads
+- **Netz-Tracer** (`src/trace_net.py`): Flood-Fill über Top+Bottom+Vias, visualisiert VCC/GND
+- **Auto-Preview** im `generate.py` mit PNG-Ausgabe
+- **Solder-Mask-Expansion** auf 0.05 mm (JLCPCB-Standard, war 0.15)
+- **Trace-Breiten**: TRACE_DATA 0.20 mm (war 0.15), TRACE_POWER 0.30 mm (war 0.20)
+- **Pin-1-Marker**: roter Punkt am DO-Pad jeder LED im Render
+- **Busbar-VDD-Vias**: 2 pro Reihe, richtungsabhängig (±0.5 mm)
+
 ---
 
 ## CLI
