@@ -14,7 +14,11 @@ Das Projekt ist funktionsfähig und erzeugt vollständige JLCPCB-kompatible Fert
 python3 src/generate.py --config cfg/SK9822_5x4.cfg
 
 # PNG-Vorschau rendern (Vorder- und Rückseite)
-python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 20
+python3 src/render_preview.py output/SK9822_5x4.zip
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 100
+python3 src/render_preview.py output/SK9822_5x4.zip --min-size 4000
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 40 --scale 2.5
+python3 src/render_preview.py output/SK9822_5x4.zip --border 1.0
 
 # Neue LED laden (einmalig)
 python3 src/fetch_component.py C41413180
@@ -151,12 +155,36 @@ Vektorglyph-Zeichensatz: `+ - D C A T K L G N V 5 > <`
 
 ### `src/render_preview.py`
 
-Erzeugt PNG-Vorschaubilder (Vorder- + Rückseite) aus dem generierten ZIP.
+Erzeugt **hochauflösende** PNG-Vorschaubilder (Vorder- + Rückseite) aus dem generierten ZIP.
 
 Verwendet `pygerber` (v2.4.x) und `Pillow`. Layer werden als RGBA-Bilder gerendert und alpha-composited.
+Board-Größe wird automatisch aus den Gerber-Daten ermittelt.
+
+**Parameter:**
+
+| Flag | Default | Beschreibung |
+|---|---|---|
+| `--dpmm` | **60** | Pixel pro mm (~1524 dpi, vorher 20) |
+| `--scale` | 1.0 | Multiplikator auf dpmm (z.B. `--scale 2`) |
+| `--min-size PX` | — | Kürzere Bildseite auf min. N Pixel skalieren |
+| `--border MM` | 0.0 | Schwarzer Rand um das Board in mm |
+| `--out DIR` | ZIP-Ordner | Ausgabeverzeichnis |
 
 ```bash
-python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 20
+# Standard (60 dpmm)
+python3 src/render_preview.py output/SK9822_5x4.zip
+
+# Extra-hohe Auflösung
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 100
+
+# Automatisch: min. 4000 px auf der kürzeren Seite
+python3 src/render_preview.py output/SK9822_5x4.zip --min-size 4000
+
+# Skalieren (effektiv 100 dpmm)
+python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 40 --scale 2.5
+
+# Mit 1 mm schwarzem Rand
+python3 src/render_preview.py output/SK9822_5x4.zip --border 1.0
 # → output/SK9822_5x4_front.png
 # → output/SK9822_5x4_back.png
 ```
