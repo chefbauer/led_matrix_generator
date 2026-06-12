@@ -57,6 +57,14 @@ def build_top_soldermask(
     for vx, vy in _via_list(leds, fp, pitch):
         g.flash(via_ap, vx, vy)
 
+    # Trennpad-Oeffnungen (nur 4-Pin-LEDs)
+    if not has_pad(fp, "CO"):
+        from top_copper import cut_pad_positions, CUT_PAD_W, CUT_PAD_H
+        cut_ap = g.add_aperture(ApertureShape.RECT,
+                                CUT_PAD_W + 2 * SM_EXP, CUT_PAD_H + 2 * SM_EXP)
+        for cx, cy in cut_pad_positions(leds, fp):
+            g.flash(cut_ap, cx, cy)
+
     # Busbar VDD-Vias + VDD-Kupferflaeche + Connector-Pads (Top)
     if busbar > 0:
         from bottom_copper import (busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD,
