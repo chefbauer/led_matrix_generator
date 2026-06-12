@@ -193,13 +193,15 @@ def build_top_copper(
         sig_ap   = g.add_aperture(ApertureShape.CIRCLE, PAD_DIA_SIG)
         trace_ct = g.add_aperture(ApertureShape.CIRCLE, TRACE_DATA)
         g.draw(sig_ap,   sig_x1, y_dat, sig_x2, y_dat)   # DAT-Pad
-        g.draw(trace_ct, sig_cx, y_dat, di_x,   y_dat)   # DAT horizontal
-        g.draw(trace_ct, di_x,   y_dat, di_x,   di_y)    # DAT vertikal
+        d_dat = y_dat - di_y  # 45°-Segment Länge = 0.9 mm
+        g.draw(trace_ct, sig_cx, y_dat, di_x - d_dat, y_dat)   # horizontal
+        g.draw(trace_ct, di_x - d_dat, y_dat, di_x, di_y)       # 45° ins Pad
         if has_clk:
             y_clk = ci_y + PAD_DIA_SIG / 2 + 2 * DR.CLEARANCE
             g.draw(sig_ap,   sig_x1, y_clk, sig_x2, y_clk)   # CLK-Pad
-            g.draw(trace_ct, sig_cx, y_clk, ci_x,   y_clk)   # CLK horizontal
-            g.draw(trace_ct, ci_x,   y_clk, ci_x,   ci_y)    # CLK vertikal
+            d_clk = y_clk - ci_y  # 45°-Segment Länge = 0.9 mm
+            g.draw(trace_ct, sig_cx, y_clk, ci_x - d_clk, y_clk)   # horizontal
+            g.draw(trace_ct, ci_x - d_clk, y_clk, ci_x, ci_y)       # 45° ins Pad
 
         # +5V / GND Anschluss-Loetpads (Top Layer, gleiche Position wie Bottom)
         pwr_x1   = DR.CLEARANCE + PAD_DIA_PWR / 2
