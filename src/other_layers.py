@@ -11,7 +11,7 @@ Solder Mask: Oeffnungen sind 0.05 mm groesser als der Pad auf jeder Seite.
 from __future__ import annotations
 from typing import List
 from gerber_writer import GerberWriter, ApertureShape
-from footprint import SK9822_EC20, pad_pos, via_pos, Footprint
+from footprint import SK9822_EC20, pad_pos, via_pos, get_pad, has_pad, Footprint
 from matrix import LedInstance, board_size
 import design_rules as DR
 
@@ -57,13 +57,50 @@ def build_top_soldermask(
     for vx, vy in _via_list(leds, pitch):
         g.flash(via_ap, vx, vy)
 
-    # Busbar VDD-Vias auf Top
+    # Busbar VDD-Vias + VDD-Kupferflaeche + Connector-Pads (Top)
     if busbar > 0:
-        from bottom_copper import busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD
-        bb_vias = busbar_vdd_via_positions(leds, pitch, x_offset)
+        from bottom_copper import (busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD,
+                                   PAD_DIA_SIG, PAD_DIA_PWR)
+        bb_vias   = busbar_vdd_via_positions(leds, pitch, x_offset)
         bb_via_ap = g.add_aperture(ApertureShape.CIRCLE, BUSBAR_VDD_VIA_PAD + 2 * SM_EXP)
         for vx, vy in bb_vias:
             g.flash(bb_via_ap, vx, vy)
+
+        # VDD-Kupferflaeche Freilegung (gleiche Abmessungen wie copper_top)
+        busbar_w    = x_offset - 2 * DR.CLEARANCE - DR.BUS_GAP
+        y_gnd_pad   = DR.CLEARANCE + PAD_DIA_PWR / 2
+        y_5v_pad    = y_gnd_pad + PAD_DIA_PWR + DR.CLEARANCE
+        via_ys      = [vy for _, vy in bb_vias]
+        pour_bottom = min(min(via_ys) - DR.VIA_PAD_D / 2, y_5v_pad) - DR.CLEARANCE
+        pour_top    = max(via_ys) + DR.VIA_PAD_D / 2 + DR.CLEARANCE
+        pour_h_sm   = pour_top - pour_bottom + 2 * SM_EXP
+        pour_cx_sm  = DR.CLEARANCE + busbar_w / 2
+        pour_cy_sm  = (pour_top + pour_bottom) / 2
+        pour_ap_sm  = g.add_aperture(ApertureShape.RECT,
+                                     busbar_w + 2 * SM_EXP, pour_h_sm)
+        g.flash(pour_ap_sm, pour_cx_sm, pour_cy_sm)
+
+        # DAT/CLK Connector-Pad Freilegungen
+        first_led  = min(leds, key=lambda l: l.index)
+        di_x, di_y = pad_pos(first_led.x, first_led.y, first_led.rotation,
+                              get_pad(fp, "DI"))
+        sig_x1    = DR.CLEARANCE + PAD_DIA_SIG / 2
+        sig_x2    = sig_x1 + PAD_DIA_SIG
+        y_dat     = di_y + PAD_DIA_SIG / 2 + 2 * DR.CLEARANCE
+        sig_ap_sm = g.add_aperture(ApertureShape.CIRCLE, PAD_DIA_SIG + 2 * SM_EXP)
+        g.draw(sig_ap_sm, sig_x1, y_dat, sig_x2, y_dat)
+        if has_pad(fp, "CI"):
+            ci_x, ci_y = pad_pos(first_led.x, first_led.y, first_led.rotation,
+                                  get_pad(fp, "CI"))
+            y_clk = ci_y + PAD_DIA_SIG / 2 + 2 * DR.CLEARANCE
+            g.draw(sig_ap_sm, sig_x1, y_clk, sig_x2, y_clk)
+
+        # +5V / GND Anschluss-Pad Freilegungen (Top)
+        pwr_x1    = DR.CLEARANCE + PAD_DIA_PWR / 2
+        pwr_x2    = DR.CLEARANCE + busbar_w - PAD_DIA_PWR / 2
+        pwr_ap_sm = g.add_aperture(ApertureShape.CIRCLE, PAD_DIA_PWR + 2 * SM_EXP)
+        g.draw(pwr_ap_sm, pwr_x1, y_gnd_pad, pwr_x2, y_gnd_pad)
+        g.draw(pwr_ap_sm, pwr_x1, y_5v_pad,  pwr_x2, y_5v_pad)
 
     return g.render()
 
@@ -76,26 +113,35 @@ def build_bottom_soldermask(
     led_current_ma: float = 15.0,
     copper_oz: float = 1.0,
     board_height: float = 0.0,
+    x_offset: float = 0.0,
 ) -> str:
-    """Bottom Solder Mask: Oeffnungen ueber Via-Pads und Busbar-Bereichen."""
+    """Bottom Solder Mask: Oeffnungen ueber Via-Pads und GND-Busbar-Bereich."""
     g = GerberWriter("Bottom Solder Mask (GBS)")
     via_ap = g.add_aperture(ApertureShape.CIRCLE, VIA_PAD_D + 2 * SM_EXP)
 
     for vx, vy in _via_list(leds, pitch):
         g.flash(via_ap, vx, vy)
 
-    # Busbar-Solder-Mask: volle Hoehe freigeben (zum Anloeten von Drahten)
-    if busbar > 0 and board_height > 0:
-        w_b = DR.busbar_width_mm(len(leds), led_current_ma, copper_oz)
-        gnd_cx = DR.CLEARANCE + w_b / 2
-        vdd_cx = DR.CLEARANCE + w_b + DR.BUS_GAP + w_b / 2
-        # Freilegungshoehe: Board-Hoehe minus Clearance oben und unten
-        expose_h = board_height - 2 * SM_EXP
-        # RECT-Aperture: Breite = w_b, Hoehe = expose_h
-        busbar_ap = g.add_aperture(ApertureShape.RECT, w_b, expose_h)
-        center_y = board_height / 2
-        g.flash(busbar_ap, gnd_cx, center_y)  # GND-Busbar
-        g.flash(busbar_ap, vdd_cx, center_y)  # VDD-Busbar
+    # GND-Busbar Freilegung (nur GND-Bereich auf Bottom; VDD-Busbar ist auf Top)
+    if busbar > 0 and board_height > 0 and x_offset > 0:
+        from bottom_copper import (busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD,
+                                   PAD_DIA_PWR)
+        bb_vias    = busbar_vdd_via_positions(leds, pitch, x_offset)
+        via_x      = bb_vias[0][0]
+        pour_left  = DR.CLEARANCE
+        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.CLEARANCE
+        pour_w     = pour_right - pour_left
+        gnd_cx     = (pour_left + pour_right) / 2
+        pour_h     = board_height - 2 * DR.CLEARANCE
+        # Freilegung gleich gross wie Kupferflaeche (keine Expansion noetig)
+        pour_ap    = g.add_aperture(ApertureShape.RECT, pour_w, pour_h)
+        g.flash(pour_ap, gnd_cx, board_height / 2)
+
+        # Busbar VDD-Vias auf Bottom (separate Freilegungen)
+        bb_via_ap_bsm = g.add_aperture(ApertureShape.CIRCLE,
+                                       BUSBAR_VDD_VIA_PAD + 2 * SM_EXP)
+        for vx, vy in bb_vias:
+            g.flash(bb_via_ap_bsm, vx, vy)
 
     return g.render()
 

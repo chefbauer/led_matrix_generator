@@ -19,7 +19,7 @@ import os
 import configparser
 from pathlib import Path
 
-from footprint import SK9822_EC20, FOOTPRINTS
+from footprint import footprint_from_data
 from matrix import generate_matrix, board_size
 from top_copper import build_top_copper
 from bottom_copper import build_bottom_copper
@@ -49,9 +49,7 @@ FILE_NAMES = {
 }
 
 # JLCPCB-Teilenummern der verwendeten Bauteile
-JLCPCB_PARTS = {
-    "SK9822-EC20": "C2909059",
-}
+# Nicht mehr benoetigt – Footprints werden direkt aus data/{lcsc_id}/ geladen.
 
 
 def generate(
@@ -60,13 +58,13 @@ def generate(
     pitch: float = 5.0,
     margin: float = 2.0,
     output: str = "output/matrix.zip",
-    fp_name: str = "SK9822-EC20",
+    lcsc_id: str = "C2909059",
     busbar: int = 0,
     led_current_ma: float = 15.0,
     copper_oz: float = 1.0,
 ):
     import design_rules as DR
-    fp = FOOTPRINTS[fp_name]
+    fp = footprint_from_data(lcsc_id)
 
     # Busbar: extra Breite links, margin bleibt separat rundherum
     n_leds = cols * rows
@@ -81,7 +79,6 @@ def generate(
     w, h = board_size(cols, rows, pitch, margin, fp, extra_left=x_offset)
 
     # Komponentendaten laden (BOM/CPL)
-    lcsc_id = JLCPCB_PARTS[fp_name]
     try:
         component = load_component(lcsc_id)
         has_component_data = True
@@ -101,7 +98,8 @@ def generate(
     print()
 
     files = {
-        FILE_NAMES["gto"]: build_top_silkscreen(leds, fp, pitch=pitch, board_width=w),
+        FILE_NAMES["gto"]: build_top_silkscreen(leds, fp, pitch=pitch, board_width=w,
+                                                busbar=busbar, x_offset=x_offset),
         FILE_NAMES["gtl"]: build_top_copper(leds, fp, pitch=pitch,
                                             busbar=busbar, x_offset=x_offset),
         FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch,
@@ -112,7 +110,8 @@ def generate(
                                                 busbar=busbar, x_offset=x_offset),
         FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp, pitch=pitch,
                                                    busbar=busbar, led_current_ma=led_current_ma,
-                                                   copper_oz=copper_oz, board_height=h),
+                                                   copper_oz=copper_oz, board_height=h,
+                                                   x_offset=x_offset),
         FILE_NAMES["gko"]: build_board_outline(cols, rows, pitch, margin, extra_left=x_offset),
         FILE_NAMES["drl"]: build_drill(leds, fp, pitch=pitch, busbar=busbar, x_offset=x_offset),
     }
@@ -144,7 +143,8 @@ if __name__ == "__main__":
     parser.add_argument("--pitch",  type=float, default=None)
     parser.add_argument("--margin", type=float, default=None)
     parser.add_argument("--output", type=str,   default=None)
-    parser.add_argument("--led",    type=str,   default=None)
+    parser.add_argument("--lcsc",   type=str,   default=None,
+                        help="JLCPCB-Teilenummer, z.B. C2909059")
     args = parser.parse_args()
 
     # Defaults
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     cfg_pitch  = 5.0
     cfg_margin = 2.0
     cfg_output = "output/matrix.zip"
-    cfg_led    = "SK9822-EC20"
+    cfg_lcsc         = "C2909059"
     cfg_busbar       = 0
     cfg_led_current  = 15.0
     cfg_copper_oz    = 1.0
@@ -177,15 +177,8 @@ if __name__ == "__main__":
         cfg_led_current   = ini.getfloat("matrix", "led_current_ma", fallback=15.0)
         cfg_copper_oz     = ini.getfloat("matrix", "copper_oz",      fallback=1.0)
 
-        # LED-Typ aus JLCPCB-Teilenummer ableiten
-        lcsc = ini.get("led", "jlcpcb_part", fallback=None)
-        if lcsc:
-            rev = {v: k for k, v in JLCPCB_PARTS.items()}
-            if lcsc in rev:
-                cfg_led = rev[lcsc]
-            else:
-                print(f"[FEHLER] JLCPCB-Teil '{lcsc}' nicht in JLCPCB_PARTS bekannt.")
-                raise SystemExit(1)
+        # LCSC-ID direkt aus Config lesen
+        cfg_lcsc = ini.get("led", "jlcpcb_part", fallback=cfg_lcsc)
 
         # Output-Name = Config-Dateiname ohne Extension
         cfg_output = f"output/{cfg_path.stem}.zip"
@@ -196,7 +189,7 @@ if __name__ == "__main__":
     pitch  = args.pitch  if args.pitch  is not None else cfg_pitch
     margin = args.margin if args.margin is not None else cfg_margin
     output = args.output if args.output is not None else cfg_output
-    led    = args.led    if args.led    is not None else cfg_led
+    lcsc   = args.lcsc   if args.lcsc   is not None else cfg_lcsc
 
     generate(
         cols=cols,
@@ -204,7 +197,7 @@ if __name__ == "__main__":
         pitch=pitch,
         margin=margin,
         output=output,
-        fp_name=led,
+        lcsc_id=lcsc,
         busbar=cfg_busbar,
         led_current_ma=cfg_led_current,
         copper_oz=cfg_copper_oz,

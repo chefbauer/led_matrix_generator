@@ -41,6 +41,7 @@ Strom kommt oben an (-) und geht unten raus (+).
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 
@@ -121,9 +122,73 @@ def get_pad(fp: Footprint, signal: str) -> Pad:
     raise KeyError(f"Signal '{signal}' nicht im Footprint '{fp.name}' gefunden")
 
 
+def has_pad(fp: Footprint, signal: str) -> bool:
+    """True wenn der Footprint ein Pad mit diesem Signalnamen hat."""
+    return any(p.signal == signal for p in fp.pads)
+
+
 FOOTPRINTS = {
     "SK9822-EC20": SK9822_EC20,
 }
+
+
+def footprint_from_data(lcsc_id: str) -> Footprint:
+    """
+    Footprint dynamisch aus data/{lcsc_id}/footprint.json laden.
+
+    Funktioniert fuer jedes Bauteil, dessen Daten per fetch_component.py
+    geladen wurden. Kein Hardcoding erforderlich.
+
+    Signal-Konventionen (normalisiert):
+      DI / DO / CI / CO / VDD / GND
+    Falls CI/CO fehlen (4-Pad LED ohne CLK) bleiben sie einfach weg.
+
+    Y-Flip: footprint.json speichert bereits korrekte Gerber-Koordinaten
+    (Y-Flip wurde in fetch_component.py angewendet).
+    """
+    import json as _json
+
+    workspace = Path(__file__).parent.parent
+    fp_path   = workspace / "data" / lcsc_id / "footprint.json"
+    cmp_path  = workspace / "data" / lcsc_id / "component.json"
+
+    if not fp_path.exists():
+        raise FileNotFoundError(
+            f"Footprint-Daten fehlen: {fp_path}\n"
+            f"Bitte zuerst ausführen: python3 src/fetch_component.py {lcsc_id}"
+        )
+
+    fp_data  = _json.loads(fp_path.read_text(encoding="utf-8"))
+    cmp_data = _json.loads(cmp_path.read_text(encoding="utf-8")) if cmp_path.exists() else {}
+
+    pads_raw = fp_data.get("pads", [])
+
+    # Gehaeuse-Abmessungen aus Pad-Ausdehnung schaetzen
+    xs = [abs(p["x"]) + p["width"]  / 2 for p in pads_raw]
+    ys = [abs(p["y"]) + p["height"] / 2 for p in pads_raw]
+    bw = round(max(xs) * 2, 3) if xs else 2.0
+    bh = round(max(ys) * 2, 3) if ys else 2.0
+
+    pads = [
+        Pad(
+            number=str(p["number"]),
+            signal=p.get("signal", ""),
+            x=p["x"],
+            y=-p["y"],        # Y-Flip: EasyEDA-Screen -> Gerber-Math
+            width=p["width"],
+            height=p["height"],
+        )
+        for p in pads_raw
+    ]
+
+    name = cmp_data.get("mfr_part", lcsc_id)
+    return Footprint(
+        name=name,
+        description=cmp_data.get("package", ""),
+        body_width=bw,
+        body_height=bh,
+        pads=pads,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,10 @@ TRACE_POWER = 0.40   # Breite der Stromschiene in mm
 BUSBAR_VDD_VIA_DRILL = 0.30
 BUSBAR_VDD_VIA_PAD   = 0.50
 
+# Anschluss-Lötpad-Durchmesser (Kreisbahn-Aperture erzeugt Oval)
+PAD_DIA_SIG = 1.2   # DAT/CLK Signalpads in mm
+PAD_DIA_PWR = 2.4   # +5V/GND Leistungspads in mm
+
 
 def busbar_vdd_via_positions(
     leds: List[LedInstance],
@@ -117,5 +121,28 @@ def build_bottom_copper(
     if busbar > 0:
         for vx, vy in bb_vias:
             g.flash(bb_via_ap, vx, vy)
+
+    # -------------------------------------------------------------------
+    # GND-Busbar: Volle Kupferflaeche + Anschluss-Loetpads (Bottom Layer)
+    # Kupferflaeche muss Abstand zu Busbar-VDD-Vias einhalten!
+    # -------------------------------------------------------------------
+    if busbar > 0 and board_height > 0:
+        via_x      = bb_vias[0][0]            # Busbar-VDD-Via X (alle gleich)
+        pour_left  = DR.CLEARANCE
+        pour_right = via_x - DR.VIA_PAD_D / 2 - DR.CLEARANCE
+        pour_w     = pour_right - pour_left
+        gnd_cx     = (pour_left + pour_right) / 2
+        pour_h     = board_height - 2 * DR.CLEARANCE
+        pour_ap    = g.add_aperture(ApertureShape.RECT, pour_w, pour_h)
+        g.flash(pour_ap, gnd_cx, board_height / 2)
+
+        # +5V / GND Anschluss-Loetpads (Bottom Layer, gleiche Positionen wie Top)
+        pwr_x1 = DR.CLEARANCE + PAD_DIA_PWR / 2
+        pwr_x2 = pour_right - PAD_DIA_PWR / 2
+        pwr_ap = g.add_aperture(ApertureShape.CIRCLE, PAD_DIA_PWR)
+        y_gnd  = DR.CLEARANCE + PAD_DIA_PWR / 2
+        y_5v   = y_gnd + PAD_DIA_PWR + DR.CLEARANCE
+        g.draw(pwr_ap, pwr_x1, y_gnd, pwr_x2, y_gnd)
+        g.draw(pwr_ap, pwr_x1, y_5v,  pwr_x2, y_5v)
 
     return g.render()

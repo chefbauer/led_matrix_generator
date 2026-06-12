@@ -19,7 +19,7 @@ Rotation:
 from __future__ import annotations
 from typing import List
 from gerber_writer import GerberWriter, ApertureShape
-from footprint import SK9822_EC20, get_pad, pad_pos, via_pos, Footprint
+from footprint import SK9822_EC20, get_pad, has_pad, pad_pos, via_pos, Footprint
 from matrix import LedInstance
 from router import route, led_obstacles
 import design_rules as DR
@@ -90,8 +90,10 @@ def build_top_copper(
         for i in range(len(dat_path) - 1):
             g.draw(trace_d, dat_path[i][0], dat_path[i][1], dat_path[i+1][0], dat_path[i+1][1])
 
-        co_pad = get_pad(fp, "CO")
-        ci_pad = get_pad(fp, "CI")
+        co_pad = get_pad(fp, "CO") if has_pad(fp, "CO") else None
+        ci_pad = get_pad(fp, "CI") if has_pad(fp, "CI") else None
+        if co_pad is None or ci_pad is None:
+            continue   # LED ohne CLK (z.B. 4-Pad WS2812-kompatibel), CLK-Trace weglassen
         x1, y1 = pad_pos(led.x,      led.y,      led.rotation,      co_pad)
         x2, y2 = pad_pos(next_led.x, next_led.y, next_led.rotation, ci_pad)
 
@@ -123,17 +125,14 @@ def build_top_copper(
             g.draw(trace_p, px, py, vx, vy)
 
     # -------------------------------------------------------------------
-    # 4. Busbar VDD-Sammelleitung (Top Layer, nur wenn busbar > 0)
-    #
-    # Jede Reihe hat eine VDD-Via an der rechten Kante der Busbar-Zone.
-    # Diese Vias werden auf dem Top Layer vertikal verbunden.
-    # Anschluss-Pad am oberen Ende fuer externe +5V Leitung.
+    # 4. Busbar VDD-Sammelleitung + Connector-Bereich (Top Layer)
     # -------------------------------------------------------------------
     if busbar > 0:
-        from bottom_copper import busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD
-        bb_vias = busbar_vdd_via_positions(leds, pitch, x_offset)
+        from bottom_copper import (busbar_vdd_via_positions, BUSBAR_VDD_VIA_PAD,
+                                   PAD_DIA_SIG, PAD_DIA_PWR)
+        bb_vias   = busbar_vdd_via_positions(leds, pitch, x_offset)
         bb_via_ap = g.add_aperture(ApertureShape.CIRCLE, BUSBAR_VDD_VIA_PAD)
-        bb_trace = g.add_aperture(ApertureShape.CIRCLE, DR.TRACE_POWER)
+        bb_trace  = g.add_aperture(ApertureShape.CIRCLE, DR.TRACE_POWER)
 
         # Via-Pads auf Top flashen
         for vx, vy in bb_vias:
@@ -144,5 +143,69 @@ def build_top_copper(
             ys = [vy for _, vy in bb_vias]
             bx = bb_vias[0][0]  # alle gleiche X
             g.draw(bb_trace, bx, min(ys), bx, max(ys))
+
+        # -------------------------------------------------------------------
+        # 5. VDD-Kupferflaeche (Top), horizontale Verteilleitungen,
+        #    DAT/CLK Connector-Pads, +5V/GND Anschluss-Loetpads
+        # -------------------------------------------------------------------
+        busbar_w  = x_offset - 2 * DR.CLEARANCE - DR.BUS_GAP
+        pour_cx   = DR.CLEARANCE + busbar_w / 2
+
+        # +5V/GND Anschlusspad-Positionen (benoetigt fuer pour_bottom)
+        y_gnd_pad = DR.CLEARANCE + PAD_DIA_PWR / 2
+        y_5v_pad  = y_gnd_pad + PAD_DIA_PWR + DR.CLEARANCE
+
+        # VDD-Kupferflaeche: deckt alle Busbar-VDD-Vias ab + 5V-Pad
+        via_ys      = [vy for _, vy in bb_vias]
+        pour_bottom = min(min(via_ys) - DR.VIA_PAD_D / 2, y_5v_pad) - DR.CLEARANCE
+        pour_top    = max(via_ys) + DR.VIA_PAD_D / 2 + DR.CLEARANCE
+        pour_h      = pour_top - pour_bottom
+        pour_cy     = (pour_top + pour_bottom) / 2
+        pour_ap     = g.add_aperture(ApertureShape.RECT, busbar_w, pour_h)
+        g.flash(pour_ap, pour_cx, pour_cy)
+
+        # Horizontale VDD-Verteilleitungen (0.6 mm, eine pro Reihe)
+        rows_vdd: dict = {}
+        for led in leds:
+            rows_vdd.setdefault(led.row, []).append(led)
+        vdd_h_ap = g.add_aperture(ApertureShape.CIRCLE, 0.6)
+        bb_x = bb_vias[0][0]
+        for row_idx in sorted(rows_vdd.keys()):
+            row_leds_v = rows_vdd[row_idx]
+            first_v    = min(row_leds_v, key=lambda l: l.index)
+            _, via_y_v = via_pos(first_v.x, first_v.y, first_v.rotation, "VDD", pitch)
+            x_right_v  = max(via_pos(l.x, l.y, l.rotation, "VDD", pitch)[0]
+                             for l in row_leds_v)
+            g.draw(vdd_h_ap, bb_x, via_y_v, x_right_v, via_y_v)
+
+        # DAT/CLK Connector-Pads + L-foermiges Routing zu LED D1
+        first_led  = min(leds, key=lambda l: l.index)
+        di_x, di_y = pad_pos(first_led.x, first_led.y, first_led.rotation,
+                              get_pad(fp, "DI"))
+        has_clk    = has_pad(fp, "CI")
+        if has_clk:
+            ci_x, ci_y = pad_pos(first_led.x, first_led.y, first_led.rotation,
+                                  get_pad(fp, "CI"))
+        sig_x1  = DR.CLEARANCE + PAD_DIA_SIG / 2
+        sig_x2  = sig_x1 + PAD_DIA_SIG
+        sig_cx  = (sig_x1 + sig_x2) / 2
+        y_dat   = di_y + PAD_DIA_SIG / 2 + 2 * DR.CLEARANCE
+        sig_ap   = g.add_aperture(ApertureShape.CIRCLE, PAD_DIA_SIG)
+        trace_ct = g.add_aperture(ApertureShape.CIRCLE, TRACE_DATA)
+        g.draw(sig_ap,   sig_x1, y_dat, sig_x2, y_dat)   # DAT-Pad
+        g.draw(trace_ct, sig_cx, y_dat, di_x,   y_dat)   # DAT horizontal
+        g.draw(trace_ct, di_x,   y_dat, di_x,   di_y)    # DAT vertikal
+        if has_clk:
+            y_clk = ci_y + PAD_DIA_SIG / 2 + 2 * DR.CLEARANCE
+            g.draw(sig_ap,   sig_x1, y_clk, sig_x2, y_clk)   # CLK-Pad
+            g.draw(trace_ct, sig_cx, y_clk, ci_x,   y_clk)   # CLK horizontal
+            g.draw(trace_ct, ci_x,   y_clk, ci_x,   ci_y)    # CLK vertikal
+
+        # +5V / GND Anschluss-Loetpads (Top Layer, gleiche Position wie Bottom)
+        pwr_x1   = DR.CLEARANCE + PAD_DIA_PWR / 2
+        pwr_x2   = DR.CLEARANCE + busbar_w - PAD_DIA_PWR / 2
+        pwr_ap_t = g.add_aperture(ApertureShape.CIRCLE, PAD_DIA_PWR)
+        g.draw(pwr_ap_t, pwr_x1, y_gnd_pad, pwr_x2, y_gnd_pad)  # GND-Pad
+        g.draw(pwr_ap_t, pwr_x1, y_5v_pad,  pwr_x2, y_5v_pad)   # +5V-Pad
 
     return g.render()
