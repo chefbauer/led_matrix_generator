@@ -89,15 +89,24 @@ def build_top_copper(
         x2, y2 = pad_pos(next_led.x, next_led.y, next_led.rotation, di_pad)
 
         if led.row != next_led.row and abs(x1 - x2) < 0.01:
-            # Reihen-Uebergang: beide Pads auf gleicher X, Trace laeuft durch Koerper.
-            # Beide Traces als U-Route nach aussen. Damit sie sich nicht kreuzen:
-            #   CLK innen (x_inner): kuerzer, horizontale Segmente enden vor DAT-Vertikale
-            #   DAT aussen (x_outer): weiter, horizontale Segmente ausserhalb CLK-Vertikale
-            # Reihe gerade (270°) -> aussen = rechts (+), ungerade (90°) -> links (-)
             offset_sign = +1.0 if led.rotation == 270.0 else -1.0
-            x_inner = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
-            x_outer = x_inner + offset_sign * (DR.TRACE_DATA + DR.MIN_SPACING)
-            dat_path = [(x1, y1), (x_outer, y1), (x_outer, y2), (x2, y2)]
+            if has_pad(fp, "CO"):
+                # Reihen-Uebergang: 6-Pin-U-Route (DAT aussen, CLK innen)
+                x_inner = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
+                x_outer = x_inner + offset_sign * (DR.TRACE_DATA + DR.MIN_SPACING)
+                dat_path = [(x1, y1), (x_outer, y1), (x_outer, y2), (x2, y2)]
+            else:
+                # Reihen-Uebergang: 4-Pin-45°-Route (schraeg raus, gerade, schraeg rein)
+                gap = DR.MIN_SPACING
+                x_mid = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + gap)
+                dx = abs(x_mid - x1)          # horizontaler Schritt = 45°-Laenge
+                sy = 1.0 if y2 < y1 else -1.0  # Fahrtrichtung in Y
+                dat_path = [
+                    (x1,   y1),
+                    (x_mid, y1 - sy * dx),     # 45° schraeg weg vom Pad
+                    (x_mid, y2 + sy * dx),     # 45° schraeg zum naechsten Pad hin
+                    (x2,   y2),
+                ]
         else:
             dat_path = route(x1, y1, x2, y2, obstacles,
                              (led.x, led.y), (next_led.x, next_led.y),
@@ -117,7 +126,7 @@ def build_top_copper(
         if led.row != next_led.row and abs(x1 - x2) < 0.01:
             # CLK-Trace: innen (x_inner), damit keine Kreuzung mit DAT (x_outer)
             offset_sign = +1.0 if led.rotation == 270.0 else -1.0
-            x_inner = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + DR.MIN_SPACING)
+            x_inner = led.x + offset_sign * (fp.body_width / 2 + DR.TRACE_DATA / 2 + 0.5)
             clk_path = [(x1, y1), (x_inner, y1), (x_inner, y2), (x2, y2)]
         else:
             clk_path = route(x1, y1, x2, y2, obstacles,

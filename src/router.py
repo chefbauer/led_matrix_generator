@@ -6,11 +6,12 @@ und 45-Grad-Segmenten (PCB-Standard: H/V/45).
 
 Routing-Strategien (Prioritaet):
   1. Direkt gerade  (wenn Start und Ziel auf gleicher H- oder V-Achse)
-  2. L-Route H->V   (erst horizontal, dann vertikal)
-  3. L-Route V->H   (erst vertikal, dann horizontal)
-  4. 45-Fase Start  (diagonal bis Achsenausgleich, dann gerade)
-  5. 45-Fase Ende   (gerade bis Knie, dann 45-Grad ans Ziel)
-  6. Fallback: direkte Verbindung mit Warnung
+  2. H-45-H         (horizontal → 45° → horizontal, symmetrisch)
+  3. L-Route H->V   (erst horizontal, dann vertikal)
+  4. L-Route V->H   (erst vertikal, dann horizontal)
+  5. 45-Fase Start  (diagonal bis Achsenausgleich, dann gerade)
+  6. 45-Fase Ende   (gerade bis Knie, dann 45-Grad ans Ziel)
+  7. Fallback: direkte Verbindung mit Warnung
 
 Kollisionsabfrage:
   Konservative AABB-Pruefung: die thematische Bounding-Box einer Trace
@@ -98,10 +99,24 @@ def _route_candidates(x1: float, y1: float, x2: float, y2: float) -> List[Path]:
     if adx < EPS or ady < EPS:
         candidates.append([(x1, y1), (x2, y2)])
 
-    # 2. L-Route: erst H, dann V
+    # 2. H-45-H (3 Segmente): horizontal → 45° → horizontal
+    #    dx>dy: (x1,y1)→(x1+span,y1)→(x2-span,y2)→(x2,y2)
+    #    dy>dx: (x1,y1)→(x1,y1+span)→(x2,y2-span)→(x2,y2)
+    if adx > ady > EPS:
+        span = (adx - ady) / 2.0
+        p1 = (x1 + sx * span, y1)
+        p2 = (x2 - sx * span, y2)
+        candidates.append([(x1, y1), p1, p2, (x2, y2)])
+    elif ady > adx > EPS:
+        span = (ady - adx) / 2.0
+        p1 = (x1, y1 + sy * span)
+        p2 = (x2, y2 - sy * span)
+        candidates.append([(x1, y1), p1, p2, (x2, y2)])
+
+    # 3. L-Route: erst H, dann V
     candidates.append([(x1, y1), (x2, y1), (x2, y2)])
 
-    # 3. L-Route: erst V, dann H
+    # 4. L-Route: erst V, dann H
     candidates.append([(x1, y1), (x1, y2), (x2, y2)])
 
     # 4. 45-Fase am Start: diagonal bis Achsenausgleich, dann gerade
@@ -116,21 +131,9 @@ def _route_candidates(x1: float, y1: float, x2: float, y2: float) -> List[Path]:
         mid = (x2 - sx * diag, y2 - sy * diag)
         candidates.append([(x1, y1), mid, (x2, y2)])
 
-    # 6. H-45-H (3 Segmente): horizontal → 45° → horizontal
-    #    dx>dy: (x1,y1)→(x1+span,y1)→(x2-span,y2)→(x2,y2)
-    #    dy>dx: (x1,y1)→(x1,y1+span)→(x2,y2-span)→(x2,y2)
-    if adx > ady > EPS:
-        span = (adx - ady) / 2.0
-        p1 = (x1 + sx * span, y1)
-        p2 = (x2 - sx * span, y2)
-        candidates.append([(x1, y1), p1, p2, (x2, y2)])
-    elif ady > adx > EPS:
-        span = (ady - adx) / 2.0
-        p1 = (x1, y1 + sy * span)
-        p2 = (x2, y2 - sy * span)
-        candidates.append([(x1, y1), p1, p2, (x2, y2)])
-
-    # 7. Vollstaendig 45-Diagonal (nur wenn gleiche Laenge in H und V)
+    # 6. Vollstaendig 45-Diagonal (nur wenn gleiche Laenge in H und V)
+    if abs(adx - ady) < EPS:
+        candidates.append([(x1, y1), (x2, y2)])
     if abs(adx - ady) < EPS:
         candidates.append([(x1, y1), (x2, y2)])
 
