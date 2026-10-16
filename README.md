@@ -117,4 +117,7 @@ Internet nur einmalig für `fetch_component.py`.
 ---
 
 Idee von Mir :)
-Programmiert mit Hilfe von KI (Claude / Hermes Agent)
+Programmiert mit Hilfe von [Hermes](https://hermes-agent.nousresearch.com) und lokalem
+[Qwen3.8 Flash Next IQ3-S](https://huggingface.co/ISTA-DASLab).
+Danke an [Alibaba](https://huggingface.co/Qwen), [Strata](https://github.com/Niko1221/Strata)
+und [ISTA-DAS Labs](https://huggingface.co/ISTA-DASLab) für die Quantisierung.
