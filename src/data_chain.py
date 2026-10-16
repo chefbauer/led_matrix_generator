@@ -94,11 +94,16 @@ def compute_data_chain(leds, fp, W: float, H: float, pitch: float) -> dict:
     poly([din_via, (fdx0, fcy)], first.nets["DI"])
 
     # --- DOUT-Entry: DO von L-N -> Via -> B.Cu-Eckpad -------------------
+    # Kette endet unten-links (gerade Zeilenzahl) oder unten-rechts
+    # (ungerade) -> Via und Diagonal-Richtung gespiegelt.
     last = by_index[len(leds) - 1]
     lcx, _lcy, _ldx0, _ldx1, ldy0, _ldy1 = _pad_edges(last, "DO", fp)
-    vx, vy = 0.5, 0.5                # Via-Pad: Randabstand = 0.2
+    n_rows = max(l.row for l in leds) + 1
+    left = n_rows % 2 == 0
+    vx, vy = (0.5 if left else W - 0.5), 0.5   # Via-Pad: Randabstand = 0.2
+    sx = -1.0 if left else 1.0
     # 45-Diagonale vom DO-Pad auf den Via zu, dann gerade zum Via-Mittelpunkt
-    poly([(lcx, ldy0), (lcx - (ldy0 - vy), vy), (vx, vy)], last.nets["DO"])
+    poly([(lcx, ldy0), (lcx + sx * (ldy0 - vy), vy), (vx, vy)], last.nets["DO"])
 
     return {
         "segs": segs,

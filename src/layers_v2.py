@@ -254,13 +254,19 @@ def build_silkscreen_bottom(pg: dict, W: float, H: float) -> str:
     # Glyph-Halbbreite ~0.3 mm -> Achse bei x = 1.3.
     din_x = 1.3
     din_y = cp["DIN"][1] - 2.2
-    dout_x = 1.3
+    dout_right = cp["DOUT"][0] > W / 2
+    dout_x = W - 1.3 if dout_right else 1.3
     dout_y = cp["DOUT"][3] + 2.2
     for s, xc, yc in (("DIN", din_x, din_y), ("DOUT", dout_x, dout_y)):
-        # Achse so legen, dass Tinten-Linkskante bei 1.0 mm liegt
-        # (Einzelglyph-Ink relativ zur Glyphenmitte bestimmen)
-        lo = min(_text_ink_edges(ch, True, SILK_H)[0] for ch in set(s))
-        _text(g, ap, s, max(1.0 - lo, xc), yc, mirror=True, vertical=True)
+        if dout_right and s == "DOUT":
+            # Tinten-Rechtskante bei W-1.0 mm
+            hi = max(_text_ink_edges(ch, True, SILK_H)[1] for ch in set(s))
+            _text(g, ap, s, min(W - 1.0 - hi, xc), yc, mirror=True, vertical=True)
+        else:
+            # Achse so legen, dass Tinten-Linkskante bei 1.0 mm liegt
+            # (Einzelglyph-Ink relativ zur Glyphenmitte bestimmen)
+            lo = min(_text_ink_edges(ch, True, SILK_H)[0] for ch in set(s))
+            _text(g, ap, s, max(1.0 - lo, xc), yc, mirror=True, vertical=True)
 
     # GND/VCC: 2x mittig AUF den Stromschienen (B.Cu-Rails), auf den
     # aeusseren Stitch-Via-Reihen (y = 6.0 mm ab jeweils anderem Rand).

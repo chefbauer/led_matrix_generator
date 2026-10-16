@@ -18,7 +18,7 @@ import configparser
 from pathlib import Path
 
 from footprint import footprint_from_data
-from matrix import generate_matrix, board_size, chain_end_is_bottom_left
+from matrix import generate_matrix, board_size
 from data_chain import compute_data_chain
 from power_grid import compute_power_grid
 import layers_v2
@@ -70,11 +70,6 @@ def generate(
             f"Abbruch: pitch {pitch}mm erfuellt die Design-Regeln nicht. "
             f"Kleinster machbarer pitch: {mp}mm")
     print("Machbarkeitspruefung: OK (alle Randbedingungen erfuellt)")
-
-    if not chain_end_is_bottom_left(rows):
-        raise SystemExit(
-            f"Zeilenanzahl {rows} ist ungerade: die Kette endet nicht "
-            "unten-links (DOUT-Ecke). Bitte gerade Zeilenzahl.")
 
     W, H = board_size(cols, rows, pitch)
     leds = generate_matrix(cols, rows, pitch, fp)

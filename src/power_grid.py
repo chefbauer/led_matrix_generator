@@ -184,9 +184,13 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float) -> dict:
     # --- B.Cu-Anschlusspads --------------------------------------------
     # DIN/DOUT: 2.5 x 5 mm, VCC/GND: 5 x 5 mm, direkt am Boardrand
     # (Randabstand bewusst ignoriert, vom Anwender verlangt).
+    # DOUT-Ecke folgt dem Kettenende: unten-links bei gerader,
+    # unten-rechts bei ungerader Zeilenzahl.
+    dout_right = len(rows) % 2 == 1
     corner_pads = {
         "DIN":  (0.0, H - CONN_H, CONN_W, H),
-        "DOUT": (0.0, 0.0, CONN_W, CONN_H),
+        "DOUT": ((W - CONN_W, 0.0, W, CONN_H) if dout_right
+                 else (0.0, 0.0, CONN_W, CONN_H)),
     }
     gnd_cx = (gnd[0] + gnd[2]) / 2
     vcc_cx = (vcc[0] + vcc[2]) / 2
