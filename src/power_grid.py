@@ -21,12 +21,14 @@ Vorderseite (F.Cu):
 Alle Masse in mm, Koordinaten Ursprung links-unten.
 """
 from __future__ import annotations
+import math
 from typing import Dict, List, Tuple
 
 import design_rules as DR
 
 GAP = 1.0            # Abstand der beiden B.Cu-Rails zueinander
 RAIL_MIN = 2.5       # Mindestbreite je B.Cu-Rail -> sonst Abbruch
+VIA_AMP = 0.3        # A: Tragfahigkeit eines 0.3mm-Vias (JLC)
 RAIL_TOP_W = 0.4     # Breite der F.Cu-Innenschienen
 RAIL_EDGE_W = 0.3    # Randzonen-Schienen: schmaler (0.7mm-Zone)
 STUB_W = 0.3         # Stub-Breite zu den Power-Pads
@@ -77,8 +79,14 @@ def facing_pads(row_leds, up: bool, fp):
     return out
 
 
-def compute_power_grid(leds, fp, W: float, H: float, pitch: float) -> dict:
-    """Komplette Power-Geometrie. Siehe Modul-Doku."""
+def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
+                       led_ma: float = 15.0) -> dict:
+    """Komplette Power-Geometrie. Siehe Modul-Doku.
+
+    led_ma: Strom pro LED (mA) -> bestimmt Stitch-Via-Anzahl:
+    n = max(3, naechste ungerade Zahl >= 2*I_Reihe/0.3A)  [doppelte Sicherheit]
+    Position: symmetrisch links/mitte/rechts auf der B.Cu-Rail.
+    """
     rows = sorted({led.row for led in leds})
     by_row = {r: [l for l in leds if l.row == r] for r in rows}
 
@@ -170,39 +178,40 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float) -> dict:
     edge_rail(by_row[top_row], up=True)
     edge_rail(by_row[bot_row], up=False)
 
-    # --- Stitching-Vias: 3 pro Schiene, 2 mm, mittig auf B.Cu-Rail ----
+    # --- Stitching-Vias: Basis 3 (links/mitte/rechts auf der B.Cu-Rail),
+    #     bei mehr Strom 5/7/9... symmetrisch; doppelte Sicherheit gegen
+    #     Via-Tragfahigkeit VIA_AMP.
+    i_row = cols * led_ma / 1000.0
+    n_via = max(N_STITCH, math.ceil(2 * i_row / VIA_AMP))
+    if n_via % 2 == 0:
+        n_via += 1
     stitch_vias = []
     for rail in rails_top:
-        cx = rail_cx[rail["net"]]
-        if rail.get("edge"):
-            # Randzonen-Schiene: 2 Vias direkt NEBEN den Power-Pads der
-            # Randreihe (gleiches Netz -> Beruehrung erlaubt), Lochmitte
-            # = Padkante + 0.07 + Via-Radius, auf Padkanten-Hoehe.
-            # Von dort ueberlappt das Pad die Schiene und bleibt frei von
-            # der Datenkette (naechste Diagonale ~0.27mm entfernt).
-            rx0, rx1 = rail_cx_bounds[rail["net"]]
-            pad_off = 0.225 + 0.3 + 0.025   # -> 0.25 Abstand zum Pad,
-                                            # 0.17 zur Daten-Diagonalen
-            cands = [(x + pad_off, e) for (x, e) in rail["stubs"]
-                     if rx0 + EDGE_VIA_PAD / 2 + 0.05 <= x + pad_off
-                        <= rx1 - EDGE_VIA_PAD / 2 - 0.05
-                     and rail["x0"] <= x + pad_off <= rail["x1"]]
-            cands.sort(key=lambda p: abs(p[0] - cx))
-            for x, y in cands[:2]:
-                stitch_vias.append((x, y, rail["net"], EDGE_VIA_PAD))
-            continue
-        # Dynamisch: 2mm-Raster, so viele Vias wie in den Ueberlappungs-
-        # bereich von F.Cu-Schiene und B.Cu-Rail passen (mindestens N_STITCH).
         rx0, rx1 = rail_cx_bounds[rail["net"]]
         lo = max(rail["x0"], rx0) + 0.35
         hi = min(rail["x1"], rx1) - 0.35
-        n = max(N_STITCH, int((hi - lo) // STITCH_DX) + 1)
-        mid = (lo + hi) / 2.0
-        for i in range(n):
-            x = mid + (i - (n - 1) / 2.0) * STITCH_DX
-            if lo - 1e-9 <= x <= hi + 1e-9:
-                stitch_vias.append((x, rail["y"], rail["net"],
-                                    DR.VIA_PAD_D))
+        if hi <= lo:
+            continue
+        if rail.get("edge"):
+            # Randzonen: Vias neben Power-Pads (bewaehrte Position: Pad-
+            # Rand + 0.25, auf Padkanten-Hoehe -> kein Konflikt mit
+            # Boardrand/Datenkette). Auswahl links/mitte/rechts ueber die
+            # dafuer in Frage kommenden Pads der Randreihe.
+            pad_off = 0.225 + 0.3 + 0.025
+            cands = sorted((x + pad_off, e) for (x, e) in rail["stubs"]
+                           if lo <= x + pad_off <= hi)
+            if not cands:
+                continue
+            k = min(n_via, len(cands))
+            idx = sorted({round(i * (len(cands) - 1) / (k - 1)) if k > 1
+                          else (len(cands) - 1) // 2 for i in range(k)})
+            for j in idx:
+                x, e = cands[j]
+                stitch_vias.append((x, e, rail["net"], DR.VIA_PAD_D))
+            continue
+        for i in range(n_via):
+            x = lo + i * (hi - lo) / (n_via - 1)
+            stitch_vias.append((x, rail["y"], rail["net"], DR.VIA_PAD_D))
 
     # --- B.Cu-Anschlusspads --------------------------------------------
     # DIN/DOUT: 2.5 x 5 mm, VCC/GND: 5 x 5 mm, direkt am Boardrand

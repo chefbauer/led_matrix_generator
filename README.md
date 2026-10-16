@@ -49,6 +49,10 @@ python src/fetch_component.py C41413180
 python src/generate.py --cols 8 --rows 8 --pitch 3.0 --lcsc C41413180 \
     --output output/XL-1615_8x8.zip
 
+# Strom pro LED angeben (bestimmt Stitch-Via-Anzahl: n = 3/5/7...,
+# doppelte Sicherheit gegen 0.3A/Via; Default 15 mA = 3x5mA)
+python src/generate.py --cols 18 --rows 32 --pitch 5.0 --led-ma 60 ...
+
 # oder per Config (Dateiname = Ausgabename)
 python src/generate.py --config cfg/XL-1615_8x8.cfg
 ```
@@ -64,8 +68,10 @@ Vorderseite (F.Cu):  LED-Pads; Datenkette auf F.Cu (45°-Diagonalen innerhalb
                      der Reihe, direkte Vertikale zwischen den Reihen);
                      EINE horizontale Stromschiene je Reihenluecke,
                      alternierend GND/VCC, Breite = max. Platz der Luecke
-                     (Pad-Abstand - 2x Clearance); Stitch-Vias im 2-mm-Raster,
-                     mindestens 3 pro Schiene, mehr wenn Platz;
+                     (Pad-Abstand - 2x Clearance); Stitch-Vias: Basis 3
+                     (links/mitte/rechts auf der B.Cu-Rail), bei mehr Strom
+                     laut led_current_ma 5/7/9... symmetrisch, immer mit
+                     doppelter Sicherheit gegen 0.3A/Via;
                      kleine Netzlabels (+V / G) mittig auf den Schienen
 Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, maximale
                      Breite (abzgl. DIN/DOUT-Anschlusspads, Minimum 2.5 mm); Anschlusspads DIN/DOUT (2.5×5 mm) und

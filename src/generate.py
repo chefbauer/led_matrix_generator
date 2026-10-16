@@ -50,6 +50,7 @@ def generate(
     lcsc_id: str = "C41413180",
     preview: bool = True,
     preview_dpmm: int = 60,
+    led_ma: float = 15.0,
 ):
     from feasibility import check_matrix, min_feasible_pitch
     fp = footprint_from_data(lcsc_id)
@@ -78,7 +79,7 @@ def generate(
 
     W, H = board_size(cols, rows, pitch)
     leds = generate_matrix(cols, rows, pitch, fp)
-    pg = compute_power_grid(leds, fp, W, H, pitch)
+    pg = compute_power_grid(leds, fp, W, H, pitch, led_ma=led_ma)
     dc = compute_data_chain(leds, fp, W, H, pitch)
 
     # Komponentendaten (BOM/CPL)
@@ -144,6 +145,9 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str,   default=None)
     parser.add_argument("--lcsc",   type=str,   default=None,
                         help="JLCPCB-Teilenummer, z.B. C41413180")
+    parser.add_argument("--led-ma", type=float, default=None,
+                        help="Strom pro LED in mA (bestimmt Stitch-Via-Zahl; "
+                             "Default 15 = 3x5mA)")
     parser.add_argument("--no-preview", action="store_true")
     parser.add_argument("--dpmm", type=int, default=60)
     args = parser.parse_args()
@@ -152,6 +156,7 @@ if __name__ == "__main__":
     cfg_pitch = None
     cfg_output = "output/matrix.zip"
     cfg_lcsc = "C41413180"
+    cfg_ma = 15.0
 
     if args.config:
         cfg_path = Path(args.config)
@@ -165,6 +170,7 @@ if __name__ == "__main__":
         if ini.has_option("matrix", "pitch"):
             cfg_pitch = ini.getfloat("matrix", "pitch")
         cfg_lcsc = ini.get("led", "jlcpcb_part", fallback=cfg_lcsc)
+        cfg_ma = ini.getfloat("matrix", "led_current_ma", fallback=cfg_ma)
         cfg_output = f"output/{cfg_path.stem}.zip"
 
     cols = args.cols if args.cols is not None else cfg_cols
@@ -172,9 +178,11 @@ if __name__ == "__main__":
     pitch = args.pitch if args.pitch is not None else cfg_pitch
     output = args.output if args.output is not None else cfg_output
     lcsc = args.lcsc if args.lcsc is not None else cfg_lcsc
+    led_ma = args.led_ma if args.led_ma is not None else cfg_ma
 
     generate(
         cols=cols, rows=rows, pitch=pitch,
         output=output, lcsc_id=lcsc,
         preview=not args.no_preview, preview_dpmm=args.dpmm,
+        led_ma=led_ma,
     )
