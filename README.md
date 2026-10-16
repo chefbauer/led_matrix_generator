@@ -53,12 +53,6 @@ python src/generate.py --cols 8 --rows 8 --pitch 3.0 --lcsc C41413180 \
 # doppelte Sicherheit gegen 0.3A/Via; Default 15 mA = 3x5mA)
 python src/generate.py --cols 18 --rows 32 --pitch 5.0 --led-ma 60 ...
 
-# 3 Pads nebeneinander je Kante (Signal randbuendig, VCC/GND linksbuendig
-# auf den Rails, 1.0 mm Abstand) - fuer kachelbare Kleinmatrixen.
-# Nachteil: Rails und Rand-Vias werden schmaler -> Default aus, fuer
-# Strom-Matrixen (z.B. 32x32) nicht empfohlen.
-python src/generate.py --cols 7 --rows 10 --pitch 3.0 --edge-pads ...
-
 # oder per Config (Dateiname = Ausgabename)
 python src/generate.py --config cfg/XL-1615_8x8.cfg
 ```
@@ -82,11 +76,7 @@ Vorderseite (F.Cu):  LED-Pads; Datenkette auf F.Cu (45°-Diagonalen innerhalb
 Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, maximale
                      Breite (abzgl. DIN/DOUT-Anschlusspads, Minimum 2.5 mm); Anschlusspads DIN/DOUT (2.5×5 mm) und
                      VCC/GND-Flaechen (5×5 mm) randbuendig; Beschriftung
-                     GND/VCC je 2× mittig auf den Rails, DIN/DOUT 90° gestapelt.
-                     Option `--edge-pads`: 3 Pads nebeneinander je Kante
-                     (Signal randbuendig, 1.0 mm Abstand, VCC/GND buendig auf
-                     den Rails) – Power wahlweise oben/unten einspeisbar,
-                     dafuer schmalere Rails/Rand-Vias (Default aus).
+                     GND/VCC je 2× mittig auf den Rails, DIN/DOUT 90° gestapelt
 Rotation:            Basis 180° (DI links oben), gerade Reihen relativ -90°,
                      damit VDD↔VDD und GND↔GND sich über den Lücken gegenueberliegen
 Daten-Einstieg:      DIN immer oben links; DOUT unten (links bei gerader,

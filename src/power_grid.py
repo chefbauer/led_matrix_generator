@@ -87,7 +87,7 @@ def facing_pads(row_leds, up: bool, fp):
 
 
 def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
-                      led_ma: float = 15.0, edge_pads: bool = False) -> dict:
+                       led_ma: float = 15.0) -> dict:
     """Komplette Power-Geometrie. Siehe Modul-Doku.
 
     led_ma: Strom pro LED (mA) -> bestimmt Stitch-Via-Anzahl:
@@ -100,20 +100,15 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
     # --- B.Cu: zwei mittige Rails, maximale Breite ----------------------
     # Breite = halbe Boardbreite - GAP/2 - DIN/DOUT-Anschlusspads
     # - Clearance zu denselben. Unter RAIL_MIN -> Abbruch.
-    # edge_pads=True: 3 Pads nebeneinander je Kante (Signal randbuendig,
-    #   VCC/GND linksbuendig auf den Rails, 1.0 mm Abstand). Rails werden
-    #   dadurch um (CONN_W + 1.0) je Seite begrenzt -> weniger Rand-Vias
-    #   auf der Rail (Nachteil bei Strom-Matrixen, Default bleibt aus).
-    inset = CONN_W + (1.0 if edge_pads else DR.MIN_SPACING)
-    rw = (W - GAP) / 2 - inset
+    rw = (W - GAP) / 2 - CONN_W - DR.MIN_SPACING
     if rw < RAIL_MIN:
         raise ValueError(
             f"B.Cu-Rails zu schmal: {rw:.2f}mm < {RAIL_MIN}mm "
             f"(Board {W:.1f} x {H:.1f}mm). Groessere Matrix noetig.")
-    gnd = (inset, DR.EDGE_CLEAR,
+    gnd = (CONN_W + DR.MIN_SPACING, DR.EDGE_CLEAR,
            W / 2 - GAP / 2, H - DR.EDGE_CLEAR)
     vcc = (W / 2 + GAP / 2, DR.EDGE_CLEAR,
-           W - inset, H - DR.EDGE_CLEAR)
+           W - CONN_W - DR.MIN_SPACING, H - DR.EDGE_CLEAR)
     rails_bottom = [("GND", gnd), ("VCC", vcc)]
     rail_cx = {"GND": (gnd[0] + gnd[2]) / 2, "VCC": (vcc[0] + vcc[2]) / 2}
     rail_cx_bounds = {"GND": (gnd[0], gnd[2]), "VCC": (vcc[0], vcc[2])}
@@ -248,26 +243,12 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
     vcc_cx = (vcc[0] + vcc[2]) / 2
     # Anschlussflaechen nicht ueber Rail-Breite (sonst Kollision mit DIN/DOUT-Pads)
     pw = min(PWR_PAD, rw)
-    if edge_pads:
-        # VCC/GND-Pads buendig zur jeweiligen Rail, oben und unten:
-        # 3 Pads nebeneinander je Kante (Signal randbuendig, 1.0 mm
-        # Abstand). Pad liegt an der von der Signal-Flaeche abgewandten
-        # Rail-Kante (DOUT unten-rechts bei ungerader Zeilenzahl).
-        dout_right = len(rows) % 2 == 1
-        exposures = [
-            ((gnd[0], 0.0, gnd[0] + pw, pw), "GND"),
-            ((vcc[1] - pw, 0.0, vcc[1], pw) if dout_right else
-             (vcc[0], 0.0, vcc[0] + pw, pw), "VCC"),
-            ((gnd[0], H - pw, gnd[0] + pw, H), "GND"),
-            ((vcc[0], H - pw, vcc[0] + pw, H), "VCC"),
-        ]
-    else:
-        exposures = [
-            ((gnd_cx - pw / 2, H - pw, gnd_cx + pw / 2, H), "GND"),
-            ((vcc_cx - pw / 2, H - pw, vcc_cx + pw / 2, H), "VCC"),
-            ((gnd_cx - pw / 2, 0.0, gnd_cx + pw / 2, pw), "GND"),
-            ((vcc_cx - pw / 2, 0.0, vcc_cx + pw / 2, pw), "VCC"),
-        ]
+    exposures = [
+        ((gnd_cx - pw / 2, H - pw, gnd_cx + pw / 2, H), "GND"),
+        ((vcc_cx - pw / 2, H - pw, vcc_cx + pw / 2, H), "VCC"),
+        ((gnd_cx - pw / 2, 0.0, gnd_cx + pw / 2, pw), "GND"),
+        ((vcc_cx - pw / 2, 0.0, vcc_cx + pw / 2, pw), "VCC"),
+    ]
 
     return {
         "rails_bottom": rails_bottom,
