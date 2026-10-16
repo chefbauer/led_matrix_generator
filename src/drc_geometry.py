@@ -182,8 +182,9 @@ def run(pitch: float, cols: int = 8, rows: int = 8, lcsc: str = "C41413180"):
     n = len(copper)
     for i in range(n):
         l1, n1, r1, t1, _s1 = copper[i]
-        # Randabstand (Anschlusspads DIN/DOUT sind bewusst randbuendig)
-        if not t1.startswith("corner") and (
+        # Randabstand (Anschlusspads DIN/DOUT und B.Cu-Rail-Enden sind
+        # bewusst randbuendig: sie SIND die Anschlussflaechen)
+        if not t1.startswith("corner") and not t1.startswith("rail_bottom") and (
                 r1[0] < DR.EDGE_CLEAR - 1e-6 or r1[1] < DR.EDGE_CLEAR - 1e-6
                 or r1[2] > W - DR.EDGE_CLEAR + 1e-6
                 or r1[3] > H - DR.EDGE_CLEAR + 1e-6):

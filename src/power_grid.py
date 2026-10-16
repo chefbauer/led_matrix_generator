@@ -105,10 +105,10 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
         raise ValueError(
             f"B.Cu-Rails zu schmal: {rw:.2f}mm < {RAIL_MIN}mm "
             f"(Board {W:.1f} x {H:.1f}mm). Groessere Matrix noetig.")
-    gnd = (CONN_W + DR.MIN_SPACING, DR.EDGE_CLEAR,
-           W / 2 - GAP / 2, H - DR.EDGE_CLEAR)
-    vcc = (W / 2 + GAP / 2, DR.EDGE_CLEAR,
-           W - CONN_W - DR.MIN_SPACING, H - DR.EDGE_CLEAR)
+    gnd = (CONN_W + DR.MIN_SPACING, 0.0,
+           W / 2 - GAP / 2, H)
+    vcc = (W / 2 + GAP / 2, 0.0,
+           W - CONN_W - DR.MIN_SPACING, H)
     rails_bottom = [("GND", gnd), ("VCC", vcc)]
     rail_cx = {"GND": (gnd[0] + gnd[2]) / 2, "VCC": (vcc[0] + vcc[2]) / 2}
     rail_cx_bounds = {"GND": (gnd[0], gnd[2]), "VCC": (vcc[0], vcc[2])}
