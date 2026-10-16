@@ -54,6 +54,11 @@ def generate(
     from feasibility import check_matrix, min_feasible_pitch
     fp = footprint_from_data(lcsc_id)
 
+    # --- Mindestgroesse: validiert ab 5x4, kleiner = Abbruch ------------
+    if cols < 5 or rows < 4:
+        raise SystemExit(f"Abbruch: Matrix {cols}x{rows} zu klein "
+                         "(Minimum: 5 Spalten x 4 Zeilen).")
+
     # --- Machbarkeitspruefung VOR allem anderen -------------------------
     if pitch is None:
         pitch = min_feasible_pitch(cols, rows, fp)

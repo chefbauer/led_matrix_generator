@@ -18,9 +18,11 @@ Ausdrücklich generiert, geprüft und verifiziert (Stand Okt 2026):
 |---|---|
 | **LED:** XL-1615RGBC-WS2812B-S, LCSC **C41413180** (WS2812B-kompatibel, 1.6×1.7 mm) | ✅ |
 | **8×8-Matrix, Pitch 3.0 mm** → Board 24×24 mm (ZIP `XL-1615_8x8_v12`) | ✅ |
+| **Dynamische Groessen** 5×4 bis 12×5, gerade + ungerade Zeilenzahl, je am kleinsten machbaren Pitch (DRC + Konnektivitaet) | ✅ |
+| Mindestgroesse: < 5×4 oder Rail-Breite < 2.5 mm → kontrollierter Abbruch | ✅ |
 | Geometrie-DRC (`src/drc_geometry.py`): Clearance, Randabstand, Bohrungsabstand, Netz-Zusammenhang | ✅ 573 Kupferobjekte, 67 Netze, 0 Probleme |
 | Verbindungscheck (`tools/check_connectivity.py`): GND-, VCC- und Datenketten-Zusammenhang über alle Lagen | ✅ alle Netze zusammenhängend |
-| Machbarkeit (`src/feasibility.py`): kleinster machbarer Pitch für C41413180 = **2.95 mm** | ✅ (getestet mit 3.0) |
+| Machbarkeit (`src/feasibility.py`): kleinster machbarer Pitch größenabhängig (ungerade Zeilen **2.95 mm**, gerade Zeilen **3.0 mm** – Randzonen-Schiene an 90°-gedrehten Reihen) | ✅ |
 | Footprint gegen LCSC-API und Datenblatt verifiziert (Pads 0.45×0.65 mm) | ✅ |
 | JLCPCB **Economy**-Bestückung: keine Castellations, Bohrung ≥ 0.3 mm, Standard-Limits ohne Aufpreis | ✅ eingehalten |
 | Masken: alle 27 Bohrungen beidseitig maskenfrei (kein tenting → in 2D- und 3D-Ansicht sichtbar) | ✅ |
@@ -56,8 +58,8 @@ Vorderseite (F.Cu):  LED-Pads; Datenkette auf F.Cu (45°-Diagonalen innerhalb
                      EINE horizontale Stromschiene je Reihenluecke,
                      alternierend GND/VCC; je 3 Stitch-Vias (2 mm Abstand);
                      kleine Netzlabels (+V / G) mittig auf den Schienen
-Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, je >= 1/3
-                     der Boardbreite; Anschlusspads DIN/DOUT (2.5×5 mm) und
+Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, maximale
+                     Breite (abzgl. DIN/DOUT-Anschlusspads, Minimum 2.5 mm); Anschlusspads DIN/DOUT (2.5×5 mm) und
                      VCC/GND-Flaechen (5×5 mm) randbuendig; Beschriftung
                      GND/VCC je 2× mittig auf den Rails, DIN/DOUT 90° gestapelt
 Rotation:            Basis 180° (DI links oben), gerade Reihen relativ -90°,
@@ -79,7 +81,7 @@ Schiene versorgt; die Schienen enden bündig mit der letzten Stichleitung.
 | Clearance Leitung↔Leitung | 0.15 mm je Seite |
 | Randabstand Kupfer | 0.20 mm (randbündige Anschlusspads: bewusst ausgenommen) |
 | Datenleitung | 0.15 mm |
-| Schienen F.Cu / B.Cu | 0.40 mm / ≥ 1/3 Boardbreite |
+| Schienen F.Cu / B.Cu | 0.40 mm / max. Breite (Boardbreite − GAP − Anschlusspads − Clearance), Minimum 2.5 mm sonst Abbruch |
 
 ## Prüfwerkzeuge
 

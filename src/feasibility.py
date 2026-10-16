@@ -54,9 +54,15 @@ def check_matrix(cols: int, rows: int, pitch: float, fp) -> Tuple[bool, List[str
         reasons.append(f"C3 Innen-Schiene: Luecke zu schmal "
                        f"(pitch >= {need:.2f}mm)")
 
-    # C4: Randzonen-Schiene (engster Punkt der Architektur)
-    if pitch / 2 - ey < CL + PG.RAIL_EDGE_W + DR.EDGE_CLEAR:
-        need = 2 * (ey + CL + PG.RAIL_EDGE_W + DR.EDGE_CLEAR)
+    # C4 Randzonen-Schiene: nutzt die tatsaechliche facing-Ausdehnung der
+    # unteren/oberen Reihe (90°-gedrehte Reihen: |p.x|+p.width/2 = groesser).
+    # Obere Reihe ist immer 180° (vrow 0); kritisch ist die untere Reihe.
+    from matrix import row_rotation
+    ey_face = max(abs(p.y) + p.height / 2 for p in fp.pads)
+    ey_face_rot = max(abs(p.x) + p.width / 2 for p in fp.pads)
+    ey_edge = max(ey_face, ey_face_rot if int(row_rotation(rows - 1)) % 180 == 90 else 0.0)
+    if pitch / 2 - ey_edge < CL + PG.RAIL_EDGE_W + DR.EDGE_CLEAR:
+        need = 2 * (ey_edge + CL + PG.RAIL_EDGE_W + DR.EDGE_CLEAR)
         reasons.append(f"C4 Randzonen-Schiene: pitch >= {need:.2f}mm")
 
     # C5: Korridor-Vertikale zwischen benachbarten Pads
@@ -79,21 +85,28 @@ def check_matrix(cols: int, rows: int, pitch: float, fp) -> Tuple[bool, List[str
     rail_x_end = W - pitch / 2 + ex - min(abs(p.x) for p in fp.pads
                                           if p.signal in ("VDD", "GND")) \
         + max(p.width for p in fp.pads) / 2
-    cx_vcc = W / 2 + PG.GAP / 2 + W / 6
+    vcc_x0, vcc_x1 = W / 2 + PG.GAP / 2, W - PG.CONN_W - DR.MIN_SPACING
+    cx_vcc = (vcc_x0 + vcc_x1) / 2
     if cx_vcc + PG.STITCH_DX + DR.VIA_PAD_D / 2 > rail_x_end:
         reasons.append(f"C8 Stitch-Vias: VCC-Via bei {cx_vcc + PG.STITCH_DX:.1f} "
                        f"ueber Schienen-Ende {rail_x_end:.1f} "
                        f"(noetig: W >= {pitch + 2 * (PG.STITCH_DX + DR.VIA_PAD_D / 2 + ex + PG.GAP / 2):.1f}mm)")
 
-    # C9: Eckpads (randbuendig, Breite CONN_W) ausserhalb B.Cu-Rails
-    gnd_x0 = W / 2 - PG.GAP / 2 - W / 3
-    if PG.CONN_W + CL > gnd_x0:
-        reasons.append(f"C9 Eckpad/B.Cu-Rail: W >= "
-                       f"{6 * (PG.CONN_W + CL + PG.GAP / 2):.1f}mm")
+    # C9: B.Cu-Rails maximale Breite (abzgl. DIN/DOUT-Anschlusspads);
+    #     unter RAIL_MIN -> unmachbar. Eckpad-Clearance gilt per Konstruktion.
+    rw = (W - PG.GAP) / 2 - PG.CONN_W - DR.MIN_SPACING
+    if rw < PG.RAIL_MIN:
+        reasons.append(f"C9 B.Cu-Rail-Breite: {rw:.2f}mm < {PG.RAIL_MIN}mm "
+                       f"(noetig: W >= {2 * (PG.RAIL_MIN + PG.CONN_W + DR.MIN_SPACING + PG.GAP / 2):.1f}mm)")
 
     # C10: Economic-Minimum
     if W < 10.0 or H < 10.0:
         reasons.append(f"C10 Economic-PCBA: Board {W:.1f}x{H:.1f} < 10x10mm")
+
+    # C11: Mindestgroesse der Matrix (Referenzimplementierung 8x8,
+    #      validiert ab 5x4)
+    if cols < 5 or rows < 4:
+        reasons.append("C11 Mindestmatrix: cols >= 5 und rows >= 4")
 
     return (len(reasons) == 0, reasons)
 
