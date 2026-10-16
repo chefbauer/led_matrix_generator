@@ -96,7 +96,24 @@ Schiene versorgt; die Schienen enden bündig mit der letzten Stichleitung.
 | Clearance Leitung↔Leitung | 0.15 mm je Seite |
 | Randabstand Kupfer | 0.20 mm (randbündige Anschlusspads: bewusst ausgenommen) |
 | Datenleitung | 0.15 mm |
-| Schienen F.Cu / B.Cu | dynamisch max.: Lückenbreite − 2×Clearance bzw. Boardbreite − GAP − Anschlusspads; Minima 0.4 mm / 2.5 mm sonst Abbruch |
+| Schienen F.Cu | strombasiert: Breite für 2× Reihenstrom (IPC-2221, 1 oz, ΔT 10 °C), Minimum 0.4 mm; Randzonen-Schienen gleiche Regel, begrenzt durch die Randzone |
+| Schienen B.Cu | dynamisch max.: Boardbreite − GAP − Anschlusspads; Minimum 2.5 mm sonst Abbruch |
+| Stitch-Vias | Basis 3 (links/mitte/rechts), bei `led_current_ma` > Standard 5/7/9… symmetrisch, immer 2× Sicherheit gegen 0.3 A/Via |
+
+## Bestückungshinweis: Entkopplung
+
+**Keine Keramikkondensatoren je LED.** Die LED-Pads hängen über ~1 mm Kupfer-Stubs
+direkt an den Stromschienen (mΩ-Bereich, wenige nH) – die lokale Ladungsquelle ist
+das Kupfer selbst. Ein 0201-C könnte diese Aufgabe nicht besser erfüllen; die
+übliche „100 nF je LED"-Empfehlung gilt für Streifen mit dünnen Leitungen und
+Adern, nicht für diese Topologie.
+
+**Aber: Bulk-Kondensator am Stromeingang.** Bei Versorgung über Kabel
+(1 m Adern ≈ 1 µH) erzeugt der Gesamtstrom Lastspitzen über L·di/dt.
+Empfehlung: **220–470 µF Elektrolyt/Tantal direkt über den VCC/GND-
+Anschlusspads** (5×5 mm, direkt daneben platzierbar oder an der Zuleitung).
+Das ist der einzige WS2812-Datasheet-Punkt, der für dieses Board relevant ist
+(Heißanschließen, lange Zuleitungen).
 
 ## Prüfwerkzeuge
 

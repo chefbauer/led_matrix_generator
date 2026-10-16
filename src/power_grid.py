@@ -171,15 +171,18 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
             raise RuntimeError(f"Randzone-Netz nicht eindeutig: {nets}")
         net = "VCC" if nets == {"VDD"} else "GND"
         pw = [(x, e) for s, x, e, w, h in pads if s in ("VDD", "GND")]
-        # Dynamische Breite: Platz zwischen Pad-Kante (+Clearance) und
-        # Boardrand (-EDGE_CLEAR). Bei p3 ergibt das exakt die bisherigen
-        # 0.3mm, bei groesserem Pitch breitere Randzonen-Schienen.
+        # Breite wie Innen-Schienen: ampazitaetsbasiert (2x Sicherheit),
+        # Minimum RAIL_TOP_W, Obergrenze = Randzonenbreite - 2x Clearance.
+        # frueher: volle Zonenbreite -> bei p5 viel zu breite G/VCC-Bahn.
         if up:   # ueber der Reihe
-            w_edge = (H - DR.EDGE_CLEAR) - (max(e for _, e in pw) + DR.CLEARANCE)
-            y = max(e for _, e in pw) + DR.CLEARANCE + w_edge / 2
+            zone = (H - DR.EDGE_CLEAR) - (max(e for _, e in pw)
+                                          + DR.CLEARANCE)
+            w_edge = min(zone, max(RAIL_TOP_W, _rail_w_for_amp(2 * i_row)))
+            y = max(e for _, e in pw) + DR.CLEARANCE + zone / 2
         else:
-            w_edge = (min(e for _, e in pw) - DR.CLEARANCE) - DR.EDGE_CLEAR
-            y = min(e for _, e in pw) - DR.CLEARANCE - w_edge / 2
+            zone = (min(e for _, e in pw) - DR.CLEARANCE) - DR.EDGE_CLEAR
+            w_edge = min(zone, max(RAIL_TOP_W, _rail_w_for_amp(2 * i_row)))
+            y = min(e for _, e in pw) - DR.CLEARANCE - zone / 2
         # Abschluss buendig mit der aeussersten Stichleitung
         rails_top.append({"net": net, "y": y,
                           "x0": min(x for x, _ in pw) - STUB_W / 2,
@@ -203,21 +206,23 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
         if hi <= lo:
             continue
         if rail.get("edge"):
-            # Randzonen: Vias neben Power-Pads (bewaehrte Position: Pad-
-            # Rand + 0.25, auf Padkanten-Hoehe -> kein Konflikt mit
-            # Boardrand/Datenkette). Auswahl links/mitte/rechts ueber die
-            # dafuer in Frage kommenden Pads der Randreihe.
+            # Randzonen: Vias neben Power-Pads (x: bewaehrte Pad-Neben-
+            # Position, symmetrisch links/mitte/rechts ueber die Reihe).
+            # y: auf Schienenmitte, aber mind. Randabstand + Via-Radius
+            # vom Boardrand -> Via beruehrt immer die Schiene.
             pad_off = 0.225 + 0.3 + 0.025
-            cands = sorted((x + pad_off, e) for (x, e) in rail["stubs"]
-                           if lo <= x + pad_off <= hi)
+            vy = min(max(rail["y"], DR.EDGE_CLEAR + DR.VIA_PAD_D / 2),
+                     H - DR.EDGE_CLEAR - DR.VIA_PAD_D / 2)
+            cands = sorted((x + pad_off for (x, e) in rail["stubs"]
+                            if lo <= x + pad_off <= hi))
             if not cands:
                 continue
             k = min(n_via, len(cands))
             idx = sorted({round(i * (len(cands) - 1) / (k - 1)) if k > 1
                           else (len(cands) - 1) // 2 for i in range(k)})
             for j in idx:
-                x, e = cands[j]
-                stitch_vias.append((x, e, rail["net"], DR.VIA_PAD_D))
+                stitch_vias.append((cands[j], vy, rail["net"],
+                                    DR.VIA_PAD_D))
             continue
         for i in range(n_via):
             x = lo + i * (hi - lo) / (n_via - 1)
