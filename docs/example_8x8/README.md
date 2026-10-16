@@ -43,9 +43,9 @@ oder mit dieser Config: [`cfg/XL-1615_8x8.cfg`](../../cfg/XL-1615_8x8.cfg)
   Datenkette mit 45°-Diagonalen, eine horizontale Stromschiene je Reihenlücke
   (alternierend GND/VCC) mit je 3 Stitch-Vias auf 2 mm Abstand, kleine
   Labels +V/G zur Orientierung.
-- **Anschluss:** DIN oben links, DOUT unten links — Platinen sind kantig an
-  kantig kachelbar, Reihenfolge der Netze pro Board alterniert nicht
-  (DIN kommt immer links herein).
+- **Anschluss:** DIN oben links, DOUT unten links (bei 8 Zeilen; bei ungerader
+  Zeilenzahl wäre DOUT unten rechts). Platinen sind kantig an kantig kachelbar,
+  DIN kommt immer oben links herein.
 
 ## Bestellung bei JLCPCB
 

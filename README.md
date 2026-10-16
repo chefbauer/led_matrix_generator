@@ -62,7 +62,8 @@ Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, je >= 1/3
                      GND/VCC je 2× mittig auf den Rails, DIN/DOUT 90° gestapelt
 Rotation:            Basis 180° (DI links oben), gerade Reihen relativ -90°,
                      damit VDD↔VDD und GND↔GND sich über den Lücken gegenueberliegen
-Daten-Einstieg:      DIN oben links, DOUT unten links; je 1 Via von den
+Daten-Einstieg:      DIN immer oben links; DOUT unten (links bei gerader,
+                     rechts bei ungerader Zeilenzahl); je 1 Via von den
                      B.Cu-Anschlusspads auf die F.Cu-Kette
 ```
 
