@@ -1,0 +1,11 @@
+# Generierte Fertigungsdateien und Previews
+output/
+
+# Python-Cache
+__pycache__/
+
+# KiCad-Experimente (lokal, nicht Teil des Generators)
+kicad/
+
+# EasyEDA-Bridge/Extension (lokal, nicht Teil des Generators)
+easyeda_extension/

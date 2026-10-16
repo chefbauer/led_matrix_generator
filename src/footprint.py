@@ -286,10 +286,10 @@ def via_pos(
     nominal = CLEARANCE + w / 2
 
     # Sichere Mindestdistanz: Drill darf Pad-Kupfer nicht beruehren
-    # + 0.15mm extra Abstand (Fertigungstoleranz)
+    # + 0.25mm extra Abstand (Fertigungstoleranz)
     # + 0.01mm Puffer gegen Floating-Point-Grenzfaelle
     pad_outer = abs(pad_ry) + pw / 2
-    safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL / 2 + 0.15 + 0.01
+    safe_min  = pad_outer + VIA_DRILL_CLEAR + VIA_DRILL / 2 + 0.25 + 0.01
 
     vy = led_y + sign * max(nominal, safe_min)
     return (vx, vy)

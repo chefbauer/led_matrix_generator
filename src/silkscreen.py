@@ -83,6 +83,19 @@ GLYPHS: dict[str, list[list[tuple[float, float]]]] = {
          (0.7, 0.55), (0.85, 0.4), (0.85, 0.15),
          (0.6, 0.05), (0.2, 0.05)],
     ],
+    'I': [
+        [(0.2, 0.95), (0.8, 0.95)],               # Querstrich oben
+        [(0.5, 0.95), (0.5, 0.05)],               # Senkrechte
+        [(0.2, 0.05), (0.8, 0.05)],               # Querstrich unten
+    ],
+    'O': [
+        [(0.2, 0.3), (0.2, 0.7), (0.4, 0.95), (0.6, 0.95),
+         (0.8, 0.7), (0.8, 0.3), (0.6, 0.05), (0.4, 0.05), (0.2, 0.3)],
+    ],
+    'U': [
+        [(0.15, 0.95), (0.15, 0.35), (0.3, 0.1), (0.7, 0.1),
+         (0.85, 0.35), (0.85, 0.95)],
+    ],
     '>': [
         [(0.15, 0.15), (0.85, 0.5), (0.15, 0.85)],
     ],
@@ -99,18 +112,24 @@ def _draw_glyph(
     cx: float,
     cy: float,
     size: float = 1.0,
+    mirror: bool = False,
 ) -> None:
-    """Zeichen zentriert um (cx, cy) mit gegebener Hoehe zeichnen."""
+    """Zeichen zentriert um (cx, cy) mit gegebener Hoehe zeichnen.
+    mirror=True: horizontal gespiegelt (fuer Silkscreen auf der Rueckseite,
+    damit die Beschriftung von unten gelesen korrekt lesbar ist)."""
     char_h = size
     char_w = size * 0.85
     x0 = cx - char_w / 2
     y0 = cy - char_h / 2
     for stroke in GLYPHS.get(char, []):
         for i in range(len(stroke) - 1):
-            sx = x0 + stroke[i][0]   * char_w
-            sy = y0 + stroke[i][1]   * char_h
-            ex = x0 + stroke[i+1][0] * char_w
-            ey = y0 + stroke[i+1][1] * char_h
+            u0, u1 = stroke[i][0], stroke[i + 1][0]
+            if mirror:
+                u0, u1 = 1.0 - u0, 1.0 - u1
+            sx = x0 + u0 * char_w
+            sy = y0 + stroke[i][1] * char_h
+            ex = x0 + u1 * char_w
+            ey = y0 + stroke[i + 1][1] * char_h
             g.draw(ap, sx, sy, ex, ey)
 
 
@@ -145,32 +164,63 @@ def build_top_silkscreen(
         _draw_glyph(g, ap, arrow, mid_x, mid_y, size=1.1)
 
     # -------------------------------------------------------------------
-    # 2. Reihen-Beschriftung am Eingang: D, C, +, -
+    # 2. Edge-Connector-Beschriftung bei busbar=0: + und - zwischen LEDs
+    #    (Kein Platz am aussersten Rand wegen Halbloch-Connectors)
     # -------------------------------------------------------------------
-    for row_idx in sorted(rows.keys()):
-        row_leds  = rows[row_idx]
-        first     = min(row_leds, key=lambda l: l.index)
+    if busbar == 0 and len(by_index) >= 2:
+        first_key = min(by_index.keys())
+        first_led = by_index[first_key]
+        vdd_y = via_pos(first_led.x, first_led.y, first_led.rotation,
+                        "VDD", pitch, fp=fp)[1]
+        gnd_y = via_pos(first_led.x, first_led.y, first_led.rotation,
+                        "GND", pitch, fp=fp)[1]
 
-        di_abs  = pad_pos(first.x, first.y, first.rotation, get_pad(fp, "DI"))
-        vdd_abs = via_pos(first.x, first.y, first.rotation, "VDD", pitch, fp=fp)
-        gnd_abs = via_pos(first.x, first.y, first.rotation, "GND", pitch, fp=fp)
+        # Links: zwischen 1. und 2. LED
+        if (first_key + 1) in by_index:
+            mid_x = (by_index[first_key].x + by_index[first_key + 1].x) / 2
+            _draw_glyph(g, ap, '+', mid_x, vdd_y, size=0.8)
+            _draw_glyph(g, ap, '-', mid_x, gnd_y, size=0.8)
 
-        going_right = (first.rotation == 270.0)
-
-        if going_right:
-            lx = first.x - fp.body_width / 2 - 0.8
-        else:
-            lx = first.x + fp.body_width / 2 + 0.8
-
-        _draw_glyph(g, ap, 'D', lx, di_abs[1],  size=0.9)
-        if has_pad(fp, "CI"):
-            ci_abs = pad_pos(first.x, first.y, first.rotation, get_pad(fp, "CI"))
-            _draw_glyph(g, ap, 'C', lx, ci_abs[1],  size=0.9)
-        _draw_glyph(g, ap, '+', lx, vdd_abs[1], size=0.8)
-        _draw_glyph(g, ap, '-', lx, gnd_abs[1], size=0.8)
+        # Rechts: zwischen letzter und vorletzter LED
+        last_key = max(by_index.keys())
+        if last_key >= first_key + 2 and (last_key - 1) in by_index:
+            mid_x = (by_index[last_key - 1].x + by_index[last_key].x) / 2
+            last_led = by_index[last_key]
+            vdd_y_r = via_pos(last_led.x, last_led.y, last_led.rotation,
+                              "VDD", pitch, fp=fp)[1]
+            gnd_y_r = via_pos(last_led.x, last_led.y, last_led.rotation,
+                              "GND", pitch, fp=fp)[1]
+            _draw_glyph(g, ap, '+', mid_x, vdd_y_r, size=0.8)
+            _draw_glyph(g, ap, '-', mid_x, gnd_y_r, size=0.8)
 
     # -------------------------------------------------------------------
-    # 3. Busbar Connector-Beschriftung: DAT / CLK / +5V / GND
+    # 3. Reihen-Beschriftung am Eingang: D, C, +, -  (nur bei busbar>0)
+    # -------------------------------------------------------------------
+    if busbar > 0:
+        for row_idx in sorted(rows.keys()):
+            row_leds  = rows[row_idx]
+            first     = min(row_leds, key=lambda l: l.index)
+
+            di_abs  = pad_pos(first.x, first.y, first.rotation, get_pad(fp, "DI"))
+            vdd_abs = via_pos(first.x, first.y, first.rotation, "VDD", pitch, fp=fp)
+            gnd_abs = via_pos(first.x, first.y, first.rotation, "GND", pitch, fp=fp)
+
+            going_right = (first.rotation == 270.0)
+
+            if going_right:
+                lx = first.x - fp.body_width / 2 - 0.8
+            else:
+                lx = first.x + fp.body_width / 2 + 0.8
+
+            _draw_glyph(g, ap, 'D', lx, di_abs[1],  size=0.9)
+            if has_pad(fp, "CI"):
+                ci_abs = pad_pos(first.x, first.y, first.rotation, get_pad(fp, "CI"))
+                _draw_glyph(g, ap, 'C', lx, ci_abs[1],  size=0.9)
+            _draw_glyph(g, ap, '+', lx, vdd_abs[1], size=0.8)
+            _draw_glyph(g, ap, '-', lx, gnd_abs[1], size=0.8)
+
+    # -------------------------------------------------------------------
+    # 4. Busbar Connector-Beschriftung: DAT / CLK / +5V / GND
     # -------------------------------------------------------------------
     if busbar > 0 and x_offset > 0:
         from bottom_copper import PAD_DIA_SIG, PAD_DIA_PWR

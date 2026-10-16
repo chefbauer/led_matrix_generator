@@ -1,167 +1,121 @@
 """
 Haupt-Generator: erzeugt alle Fertigungsdateien und packt sie als ZIP.
 
+Architektur v2 (PLAN.md): nahtlose Matrix (Board = cols*pitch x rows*pitch),
+Stromschienen vertikal auf B.Cu, Reihen-Schienen horizontal auf F.Cu,
+Datenkette auf B.Cu, DIN/DOUT als SMD-Kantenpads unten.
+
 Aufruf:
-    python3 generate.py [--cols N] [--rows M] [--pitch P] [--output FILE.zip]
+    python generate.py --cols 8 --rows 8 [--pitch 3.0] [--lcsc C41413180]
+    python generate.py --config cfg/XL-1615_8x8.cfg
 
-Standardwerte: 3x2 Matrix, 5mm Pitch, Ausgabe in output/matrix.zip
-
-Komponentendaten (BOM/CPL):
-    Werden aus data/{JLCPCB_PART}/component.json geladen.
-    Falls noch nicht vorhanden:
-        python3 fetch_component.py C2909059
+Ohne --pitch wird der kleinste machbare Pitch gewaehlt (feasibility).
 """
 
 import argparse
-import io
 import zipfile
-import os
 import configparser
 from pathlib import Path
 
-from footprint import footprint_from_data, has_pad
-from matrix import generate_matrix, board_size
-from top_copper import build_top_copper
-from bottom_copper import build_bottom_copper
-from other_layers import (
-    build_top_soldermask,
-    build_bottom_soldermask,
-    build_board_outline,
-    build_drill,
-)
+from footprint import footprint_from_data
+from matrix import generate_matrix, board_size, chain_end_is_bottom_left
+from data_chain import compute_data_chain
+from power_grid import compute_power_grid
+import layers_v2
 from component_data import load_component
 from bom import build_bom
 from cpl import build_cpl
-from silkscreen import build_top_silkscreen
 from render_preview import render_zip
-# from trace_net import trace_nets   -- später aktivieren
-from edge_connector import (place_left, place_right, edge_gtl, edge_gbl,
-    edge_mask, edge_silk, edge_drill)
-
 
 # JLCPCB-Dateinamen-Konvention
 FILE_NAMES = {
-    "gto": "matrix-F_SilkS.gto",       # Top Silkscreen
-    "gtl": "matrix-F_Cu.gtl",       # Top Copper
-    "gbl": "matrix-B_Cu.gbl",       # Bottom Copper
-    "gts": "matrix-F_Mask.gts",     # Top Solder Mask
-    "gbs": "matrix-B_Mask.gbs",     # Bottom Solder Mask
-    "gko": "matrix-Edge_Cuts.gko",  # Board Outline
-    "drl": "matrix.drl",            # Drill
-    "bom": "BOM.csv",               # Bill of Materials
-    "cpl": "CPL.csv",               # Component Placement List
+    "gto": "matrix-F_SilkS.gto",
+    "gtl": "matrix-F_Cu.gtl",
+    "gbl": "matrix-B_Cu.gbl",
+    "gts": "matrix-F_Mask.gts",
+    "gbs": "matrix-B_Mask.gbs",
+    "gbo": "matrix-B_SilkS.gbo",
+    "gko": "matrix-Edge_Cuts.gko",
+    "drl": "matrix.drl",
+    "bom": "BOM.csv",
+    "cpl": "CPL.csv",
 }
-
-# JLCPCB-Teilenummern der verwendeten Bauteile
-# Nicht mehr benoetigt – Footprints werden direkt aus data/{lcsc_id}/ geladen.
 
 
 def generate(
-    cols: int = 3,
-    rows: int = 2,
-    pitch: float = 5.0,
-    margin: float = 2.0,
+    cols: int = 8,
+    rows: int = 8,
+    pitch: float | None = None,
     output: str = "output/matrix.zip",
-    lcsc_id: str = "C2909059",
-    busbar: int = 0,
-    led_current_ma: float = 15.0,
-    copper_oz: float = 1.0,
+    lcsc_id: str = "C41413180",
     preview: bool = True,
     preview_dpmm: int = 60,
 ):
-    import design_rules as DR
+    from feasibility import check_matrix, min_feasible_pitch
     fp = footprint_from_data(lcsc_id)
 
-    # Busbar: extra Breite links, margin bleibt separat rundherum
-    n_leds = cols * rows
-    if busbar > 0:
-        busbar_w = DR.busbar_width_mm(n_leds, led_current_ma, copper_oz)
-        x_offset = busbar_w + 2 * DR.CLEARANCE + DR.BUS_GAP  # Gesamtbreite busbar-Zone
-    else:
-        busbar_w = 0.0
-        x_offset = 0.0
+    # --- Machbarkeitspruefung VOR allem anderen -------------------------
+    if pitch is None:
+        pitch = min_feasible_pitch(cols, rows, fp)
+        if pitch is None:
+            raise SystemExit("Kein machbarer Pitch bis 10mm gefunden.")
+        print(f"Pitch nicht gesetzt -> kleinster machbarer: {pitch} mm")
+    ok, reasons = check_matrix(cols, rows, pitch, fp)
+    if not ok:
+        print("MACHBARKEITSPRUEFE: NICHT MACHBAR")
+        for r in reasons:
+            print(f"  - {r}")
+        mp = min_feasible_pitch(cols, rows, fp)
+        raise SystemExit(
+            f"Abbruch: pitch {pitch}mm erfuellt die Design-Regeln nicht. "
+            f"Kleinster machbarer pitch: {mp}mm")
+    print("Machbarkeitspruefung: OK (alle Randbedingungen erfuellt)")
 
-    leds = generate_matrix(cols, rows, pitch, fp, margin, x_offset=x_offset)
-    w, h = board_size(cols, rows, pitch, margin, fp, extra_left=x_offset)
-    # VDD-Rail rechts 1mm kürzer wenn Edge-Connector aktiv ist
-    right_cap = (w - 2.0) if (busbar == 0 and not has_pad(fp, "CI")) else 0.0
+    if not chain_end_is_bottom_left(rows):
+        raise SystemExit(
+            f"Zeilenanzahl {rows} ist ungerade: die Kette endet nicht "
+            "unten-links (DOUT-Ecke). Bitte gerade Zeilenzahl.")
 
-    # Komponentendaten laden (BOM/CPL)
+    W, H = board_size(cols, rows, pitch)
+    leds = generate_matrix(cols, rows, pitch, fp)
+    pg = compute_power_grid(leds, fp, W, H, pitch)
+    dc = compute_data_chain(leds, fp, W, H, pitch)
+
+    # Komponentendaten (BOM/CPL)
+    component = None
     try:
         component = load_component(lcsc_id)
         has_component_data = True
     except FileNotFoundError as exc:
         print(f"[WARNUNG] {exc}")
-        print(f"[WARNUNG] BOM und CPL werden NICHT erzeugt.")
+        print("[WARNUNG] BOM und CPL werden NICHT erzeugt.")
         has_component_data = False
 
     print(f"Matrix:  {cols} x {rows}  ({cols * rows} LEDs)")
     print(f"Pitch:   {pitch} mm")
-    print(f"Board:   {w:.1f} x {h:.1f} mm")
+    print(f"Board:   {W:.1f} x {H:.1f} mm (nahtlos anreihbar)")
     if has_component_data:
-        print(f"Bauteil: {component.mfr_part}  [{component.jlcpcb_part}]  {component.package}")
-    if busbar > 0:
-        print(f"Busbar:  {busbar} (links)  Breite={busbar_w:.2f}mm  x_offset={x_offset:.2f}mm")
+        print(f"Bauteil: {component.mfr_part}  [{component.jlcpcb_part}]  "
+              f"{component.package}")
     print(f"Output:  {output}")
     print()
 
     files = {
-        FILE_NAMES["gto"]: build_top_silkscreen(leds, fp, pitch=pitch, board_width=w,
-                                                busbar=busbar, x_offset=x_offset),
-        FILE_NAMES["gtl"]: build_top_copper(leds, fp, pitch=pitch,
-                                            busbar=busbar, x_offset=x_offset),
-        FILE_NAMES["gbl"]: build_bottom_copper(leds, fp, pitch=pitch,
-                                               busbar=busbar, led_current_ma=led_current_ma,
-                                               copper_oz=copper_oz, board_height=h,
-                                               x_offset=x_offset, right_cap=right_cap),
-        FILE_NAMES["gts"]: build_top_soldermask(leds, fp, pitch=pitch,
-                                                busbar=busbar, x_offset=x_offset),
-        FILE_NAMES["gbs"]: build_bottom_soldermask(leds, fp, pitch=pitch,
-                                                   busbar=busbar, led_current_ma=led_current_ma,
-                                                   copper_oz=copper_oz, board_height=h,
-                                                   x_offset=x_offset),
-        FILE_NAMES["gko"]: build_board_outline(cols, rows, pitch, margin, extra_left=x_offset),
-        FILE_NAMES["drl"]: build_drill(leds, fp, pitch=pitch, busbar=busbar, x_offset=x_offset),
+        FILE_NAMES["gto"]: layers_v2.build_silkscreen_top(pg),
+        FILE_NAMES["gtl"]: layers_v2.build_fcu(leds, fp, pg, dc),
+        FILE_NAMES["gbl"]: layers_v2.build_bcu(leds, fp, pg, dc),
+        FILE_NAMES["gts"]: layers_v2.build_mask_top(leds, fp, pg, dc),
+        FILE_NAMES["gbs"]: layers_v2.build_mask_bottom(pg, dc),
+        FILE_NAMES["gko"]: layers_v2.build_outline(W, H),
+        FILE_NAMES["gbo"]: layers_v2.build_silkscreen_bottom(pg, W, H),
+        FILE_NAMES["drl"]: layers_v2.build_drill(dc, pg),
     }
-
     if has_component_data:
         files[FILE_NAMES["bom"]] = build_bom(leds, component)
         files[FILE_NAMES["cpl"]] = build_cpl(leds)
 
-    # Edge-Connector (Halb-Loecher) nur bei busbar=0 + 4-Pin LED (kein CLK)
-    if busbar == 0 and not has_pad(fp, "CI"):
-        e_left  = place_left(leds, fp, h)
-        e_right = place_right(leds, fp, w, h)
-        all_vias = e_left + e_right
-        print(f"Edge vias links:  {len(e_left)} ({', '.join(f'{v.signal}@y={v.y:.2f}' for v in e_left)})")
-        print(f"Edge vias rechts: {len(e_right)} ({', '.join(f'{v.signal}@y={v.y:.2f}' for v in e_right)})")
-        for layer_key, layer_content in [
-            ("gtl", edge_gtl(e_left, e_right, leds, fp)),
-            ("gbl", edge_gbl(e_left, e_right)),
-            ("gts", edge_mask(e_left) + edge_mask(e_right)),
-            ("gbs", edge_mask(e_left) + edge_mask(e_right)),
-            ("gto", edge_silk(e_left) + edge_silk(e_right)),
-        ]:
-            files[FILE_NAMES[layer_key]] = files[FILE_NAMES[layer_key]].replace(
-                "M02*", layer_content + "M02*")
-
-        files[FILE_NAMES["drl"]] = files[FILE_NAMES["drl"]].replace(
-            "T1C0.300\n%", "T1C0.300\nT2C0.600\n%")
-        files[FILE_NAMES["drl"]] = files[FILE_NAMES["drl"]].rstrip()
-        if files[FILE_NAMES["drl"]].endswith("M30"):
-            files[FILE_NAMES["drl"]] = files[FILE_NAMES["drl"]][:-4].rstrip()
-        files[FILE_NAMES["drl"]] += "\n" + edge_drill(all_vias) + "\nM30\n"
-        # DI/DO-Edge-Via Keepout: Bottom-Rails starten bei 1.5mm statt 0.15mm
-        import re as _re_gbl
-        files[FILE_NAMES["gbl"]] = _re_gbl.sub(
-            r'X150000Y(\d+)D02\*\n',
-            r'X1500000Y\1D02*\n',
-            files[FILE_NAMES["gbl"]])
-
-    # ZIP erzeugen
     out_path = Path(output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for filename, content in files.items():
             zf.writestr(filename, content)
@@ -170,12 +124,10 @@ def generate(
     print()
     print(f"ZIP geschrieben: {out_path}  ({out_path.stat().st_size} Bytes)")
 
-    # Automatische PNG-Vorschau
     if preview:
         print()
         try:
             render_zip(str(out_path), dpmm=preview_dpmm)
-            # trace_nets(str(out_path), dpmm=preview_dpmm)   -- später
         except Exception as e:
             print(f"[WARNUNG] Preview fehlgeschlagen: {e}")
 
@@ -183,76 +135,46 @@ def generate(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LED-Matrix Gerber Generator")
+    parser = argparse.ArgumentParser(description="LED-Matrix Gerber Generator v2")
     parser.add_argument("--config", type=str, default=None,
-                        help="Pfad zu einer .cfg-Datei (z.B. cfg/SK9822_5x4.cfg)")
+                        help="Pfad zu einer .cfg-Datei (z.B. cfg/XL-1615_8x8.cfg)")
     parser.add_argument("--cols",   type=int,   default=None)
     parser.add_argument("--rows",   type=int,   default=None)
     parser.add_argument("--pitch",  type=float, default=None)
-    parser.add_argument("--margin", type=float, default=None)
     parser.add_argument("--output", type=str,   default=None)
     parser.add_argument("--lcsc",   type=str,   default=None,
-                        help="JLCPCB-Teilenummer, z.B. C2909059")
-    parser.add_argument("--no-preview", action="store_true",
-                        help="Keine PNG-Vorschau rendern")
-    parser.add_argument("--dpmm",   type=int,   default=60,
-                        help="Pixel pro mm fuer Vorschau (Standard: 60)")
+                        help="JLCPCB-Teilenummer, z.B. C41413180")
+    parser.add_argument("--no-preview", action="store_true")
+    parser.add_argument("--dpmm", type=int, default=60)
     args = parser.parse_args()
 
-    # Defaults
-    cfg_cols   = 3
-    cfg_rows   = 2
-    cfg_pitch  = 5.0
-    cfg_margin = 2.0
+    cfg_cols, cfg_rows = 8, 8
+    cfg_pitch = None
     cfg_output = "output/matrix.zip"
-    cfg_lcsc         = "C2909059"
-    cfg_busbar       = 0
-    cfg_led_current  = 15.0
-    cfg_copper_oz    = 1.0
+    cfg_lcsc = "C41413180"
 
-    # Config-Datei laden
     if args.config:
         cfg_path = Path(args.config)
         if not cfg_path.is_absolute():
-            # relativ zum Workspace-Root (parent von src/)
             cfg_path = Path(__file__).parent.parent / args.config
         ini = configparser.ConfigParser()
-        ini.read(cfg_path)
-
-        cfg_cols   = ini.getint("matrix", "cols",   fallback=cfg_cols)
-        cfg_rows   = ini.getint("matrix", "rows",   fallback=cfg_rows)
-        cfg_pitch  = ini.getfloat("matrix", "pitch", fallback=cfg_pitch)
-        cfg_margin = ini.getfloat("matrix", "margin", fallback=cfg_margin)
-
-        # Busbar
-        cfg_busbar        = ini.getint("matrix",   "busbar",         fallback=0)
-        cfg_led_current   = ini.getfloat("matrix", "led_current_ma", fallback=15.0)
-        cfg_copper_oz     = ini.getfloat("matrix", "copper_oz",      fallback=1.0)
-
-        # LCSC-ID direkt aus Config lesen
+        with open(cfg_path, encoding="utf-8-sig") as f:
+            ini.read_file(f)
+        cfg_cols = ini.getint("matrix", "cols", fallback=cfg_cols)
+        cfg_rows = ini.getint("matrix", "rows", fallback=cfg_rows)
+        if ini.has_option("matrix", "pitch"):
+            cfg_pitch = ini.getfloat("matrix", "pitch")
         cfg_lcsc = ini.get("led", "jlcpcb_part", fallback=cfg_lcsc)
-
-        # Output-Name = Config-Dateiname ohne Extension
         cfg_output = f"output/{cfg_path.stem}.zip"
 
-    # CLI-Argumente ueberschreiben Config
-    cols   = args.cols   if args.cols   is not None else cfg_cols
-    rows   = args.rows   if args.rows   is not None else cfg_rows
-    pitch  = args.pitch  if args.pitch  is not None else cfg_pitch
-    margin = args.margin if args.margin is not None else cfg_margin
+    cols = args.cols if args.cols is not None else cfg_cols
+    rows = args.rows if args.rows is not None else cfg_rows
+    pitch = args.pitch if args.pitch is not None else cfg_pitch
     output = args.output if args.output is not None else cfg_output
-    lcsc   = args.lcsc   if args.lcsc   is not None else cfg_lcsc
+    lcsc = args.lcsc if args.lcsc is not None else cfg_lcsc
 
     generate(
-        cols=cols,
-        rows=rows,
-        pitch=pitch,
-        margin=margin,
-        output=output,
-        lcsc_id=lcsc,
-        busbar=cfg_busbar,
-        led_current_ma=cfg_led_current,
-        copper_oz=cfg_copper_oz,
-        preview=not args.no_preview,
-        preview_dpmm=args.dpmm,
+        cols=cols, rows=rows, pitch=pitch,
+        output=output, lcsc_id=lcsc,
+        preview=not args.no_preview, preview_dpmm=args.dpmm,
     )

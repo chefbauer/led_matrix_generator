@@ -22,7 +22,7 @@ TRACE_POWER = 0.40   # Breite der Stromschiene in mm
 
 # Via-Parameter fuer Busbar-VDD-Verbindung (kleiner als normale Vias)
 BUSBAR_VDD_VIA_DRILL = 0.30
-BUSBAR_VDD_VIA_PAD   = 0.50
+BUSBAR_VDD_VIA_PAD   = 0.60
 
 # Anschluss-Lötpad-Durchmesser (Kreisbahn-Aperture erzeugt Oval)
 PAD_DIA_SIG = 1.2   # DAT/CLK Signalpads in mm

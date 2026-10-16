@@ -1,4 +1,4 @@
-﻿"""
+"""
 Gerber-Generator fuer die verbleibenden Lagen:
   - Top Solder Mask (GTS): Oeffnungen ueber allen Top-Pads und Via-Pads
   - Bottom Solder Mask (GBS): Oeffnungen ueber Via-Pads auf Bottom

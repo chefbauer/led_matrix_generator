@@ -349,7 +349,8 @@ def render_zip(
         gbl = read("B_Cu",      ".gbl")
         gts = read("F_Mask",    ".gts")
         gbs = read("B_Mask",    ".gbs")
-        gto = read("F_SilkS",   "SilkS", ".gto")
+        gto = read("F_SilkS",   ".gto")
+        gbo = read("B_SilkS",   ".gbo")
         gko = read("Edge_Cuts", ".gko")
         drl = read(".drl")
         cpl = read("CPL",       ".csv")
@@ -407,6 +408,7 @@ def render_zip(
         LayerSpec(gko, FileTypeEnum.EDGE,   ColorScheme.SOLDER_MASK_ALPHA),
         LayerSpec(gbs, FileTypeEnum.MASK,   ColorScheme.SOLDER_MASK_ALPHA),
         LayerSpec(gbl, FileTypeEnum.COPPER, ColorScheme.COPPER_ALPHA),
+        LayerSpec(gbo, FileTypeEnum.LEGEND, ColorScheme.SILK_ALPHA),
     ], bg_rgba=(20, 75, 20, 255), dpmm=effective_dpmm, drill_data=drl)
 
     if back:
@@ -414,6 +416,10 @@ def render_zip(
                            do_x=do_x, do_y=do_y)
         if border_mm > 0:
             _add_solid_border(back, border_mm, effective_dpmm)
+        # Echte Rueckseiten-Ansicht: an Y-Achse gespiegelt (GBO-Text
+        # wird dadurch lesbar, Kupfer seitenverkehrt wie real)
+        from PIL import Image as _Image
+        back = back.transpose(_Image.FLIP_LEFT_RIGHT)
         final = back.convert("RGB")
         final.save(str(back_path), dpi=(dpi_approx, dpi_approx), optimize=True)
         print(f"  -> {back_path}  ({final.size[0]} x {final.size[1]} px)")

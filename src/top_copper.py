@@ -84,7 +84,7 @@ def build_top_copper(
     pad_ap_90  = g.add_aperture(ApertureShape.RECT, ph, pw)   # fuer 90° / 270°
     trace_d  = g.add_aperture(ApertureShape.CIRCLE, TRACE_DATA)
     trace_p  = g.add_aperture(ApertureShape.CIRCLE, TRACE_POWER)
-    via_ap   = g.add_aperture(ApertureShape.CIRCLE, 0.50)
+    via_ap   = g.add_aperture(ApertureShape.CIRCLE, DR.VIA_PAD_D)
     cut_ap   = g.add_aperture(ApertureShape.RECT, CUT_PAD_W, CUT_PAD_H)
 
     def _pad_ap(rotation: float) -> int:

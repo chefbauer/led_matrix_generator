@@ -1,36 +1,33 @@
 """
 Design Rules fuer den LED-Matrix-Generator.
 
-Grundregel:
+Ziel: JLCPCB ECONOMY-Standard (ohne Aufpreis!), NICHT die Extremwerte
+der Capability-Tabelle (feinere Features = Kostenfaktor).
+  Quelle: https://jlcpcb.com/capabilities/Capabilities (abgerufen 2026-10-16)
+  + JLCPCB-Blog (DFM): "trace width/spacing >= 5/5 mil and via drills
+    >= 0.3mm to prevent fine-feature fees"
+  - Bohrung: min 0.3 mm (Standard ohne Aufpreis; kleiner = Aufpreis)
+  - Via Standard: 0.3 mm Bohrung / 0.6 mm Pad  (JLCPCB-Blog: "healthy
+    annular ring and reliable plating") -> Ring 0.15 mm
+  - Trace/Spacing: 5/5 mil = 0.127 mm (wir arbeiten konservativ mit 0.15)
+  - SMD-Pad zu Pad (versch. Netze): 0.15 mm; Min-SMD-Pad 0.25x0.25
+  - Via-Loch zu Trace: 0.20 mm; Via-Loch zu Loch: 0.20 mm
+  - Kupfer zu gefraester Boardkante: >= 0.20 mm
+  - Castellations: Bohrung >=0.5, Loch-zu-Loch >=0.5, Abstand zu anderer
+    Kante >=1.0 mm, Board >=10x10, Dicke >=0.6.
+    ABER: Economic-PCBA unterstuetzt KEINE Castellations/Goldfingers/
+    Edge-Plating (https://jlcpcb.com/de/capabilities/pcb-assembly-
+    capabilities, abgerufen 2026-10-16) -> alle Anschlüsse als bohrungs-
+    lose SMD-Kantenpads: DIN/DOUT-Eckenpads + GND/VCC-Kantenpads.
+  - Economic-PCBA: einseitige Bestueckung ok, Board 10x10..470x500,
+    Panel <=250x250, Dicke 0.8-1.6mm, Min-Gehaeuse 0402, Menge 2-50.
+  - Silkscreen: Linie >=0.15 mm, Texthoehe >=1.0 mm, Pad-Abstand 0.15 mm
+  - Soldermask-Bruecke (gruen, 1oz): >=0.10 mm
+
+Grundregel im Generator (bewusst ueber Economy-Minima):
     Mindestabstand zwischen zwei Leitungen (Pad-Kante zu Pad-Kante) = 0.30 mm.
     Das entspricht CLEARANCE = 0.15 mm pro Seite einer Leitung.
     Ueberall wo Clearance eingehalten wird gilt: 2 * 0.15 = 0.30 mm Abstand.
-
-Stromschienen-Geometrie (zwischen zwei LED-Reihen):
-    Freier Raum von LED-Mitte bis Mittelpunkt zwischen zwei Reihen = pitch / 2.
-    Dort liegen VDD und GND je als horizontale Schiene auf der Bottom-Lage.
-
-    Aufteilung (von LED-Mitte aus, Richtung Mittelpunkt):
-       [CLEARANCE][GND-Bus][BUS_GAP][VDD-Bus][CLEARANCE] = pitch/2
-    => Bus-Breite = (pitch/2 - 2*CLEARANCE - BUS_GAP) / 2
-
-    Beispiel pitch=5mm:
-       Bus-Breite = (2.5 - 0.15 - 0.15 - 0.30) / 2 = 0.95 mm
-
-    VDD nahe am Rand (weiter von LED-Mitte entfernt), GND innen (naeher an LED-Mitte).
-    (Konvention: VDD = Schiene mit hoeherem Y-Abstand bei positiver Richtung)
-
-Via-Geometrie:
-    Via-Pad-Ø = 0.50 mm, Drill = 0.30 mm.
-    Via sitzt direkt unter/ueber dem Pad (gleiche X wie Pad).
-    Via-Y liegt auf der Schienen-Mittellinie der jeweiligen Schiene.
-    Top-Layer-Stichleitung: senkrechte Linie vom Pad bis zur Via-Mitte.
-
-Daten-Traces:
-    Breite = 0.15 mm, Clearance = 0.15 mm (=> 0.30 mm Abstand zu anderen Traces)
-
-Top-Layer Power-Stichleitung:
-    Breite = 0.20 mm, Clearance = 0.15 mm
 """
 
 from __future__ import annotations
@@ -43,20 +40,25 @@ from __future__ import annotations
 CLEARANCE   = 0.15   # mm: Randabstand je Seite einer Leitung
 MIN_SPACING = 0.30   # mm: = 2 * CLEARANCE, Mindestabstand Leitungskante zu Leitungskante
 
+# Kupfer -> gefraeste Boardkante: JLCPCB verlangt >= 0.20 mm (nicht 0.15!).
+# Gilt fuer alle Cu-Flaechen, die nicht selbst Teil eines Halblochs sind.
+EDGE_CLEAR  = 0.20   # mm
+
 
 # ---------------------------------------------------------------------------
 # Leiterbahnbreiten
 # ---------------------------------------------------------------------------
 
-TRACE_DATA  = 0.20   # mm: Datensignale (DI/DO, CI/CO)
-TRACE_POWER = 0.30   # mm: Power-Stichleitung Top-Layer (Via -> Pad)
+TRACE_DATA  = 0.15   # mm: Datensignale (DI/DO)
+TRACE_POWER = 0.30   # mm: Stromschienen-Hauptlinien (Vorderseite)
+TRACE_DET   = 0.15   # mm: Detour-Umfahrungen der Schienen (duenn, wie Daten)
 
 
 # ---------------------------------------------------------------------------
 # Via
 # ---------------------------------------------------------------------------
 
-VIA_PAD_D        = 0.50   # mm: Via-Pad-Durchmesser
+VIA_PAD_D        = 0.60   # mm: Via-Pad-Durchmesser
 VIA_DRILL        = 0.30   # mm: Via-Bohrungs-Durchmesser
 VIA_DRILL_CLEAR  = 0.25   # mm: JLCPCB Mindestabstand Drill-Kante zu fremdem Pad-Kupfer
 

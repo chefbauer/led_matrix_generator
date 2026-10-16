@@ -129,7 +129,6 @@ class GerberWriter:
         lines += [
             "%FSLAX46Y46*%",   # Koordinatenformat: 4 Vor-, 6 Nachkommastellen
             "%MOMM*%",         # Einheit Millimeter
-            "%LPD*%",          # Layer Polarity: Dark
         ]
         # Apertur-Definitionen
         lines += self._apertures
