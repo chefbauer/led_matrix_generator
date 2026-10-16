@@ -23,15 +23,16 @@ Ausdrücklich generiert, geprüft und verifiziert (Stand Okt 2026):
 | Was | Ergebnis |
 |---|---|
 | **LED:** XL-1615RGBC-WS2812B-S, LCSC **C41413180** (WS2812B-kompatibel, 1.6×1.7 mm) | ✅ |
-| **8×8-Matrix, Pitch 3.0 mm** → Board 24×24 mm (ZIP `XL-1615_8x8_v12`) | ✅ |
+| **8×8-Matrix, Pitch 3.0 mm** → Board 24×24 mm (ZIP `XL-1615_8x8_v13`) | ✅ |
+| **8×8-Matrix, Pitch 5.0 mm** → Board 40×40 mm (dynamische Schienen/Vias, DRC OK) | ✅ |
 | **Dynamische Groessen** 5×4 bis 12×5, gerade + ungerade Zeilenzahl, je am kleinsten machbaren Pitch (DRC + Konnektivitaet) | ✅ |
 | Mindestgroesse: < 5×4 oder Rail-Breite < 2.5 mm → kontrollierter Abbruch | ✅ |
-| Geometrie-DRC (`src/drc_geometry.py`): Clearance, Randabstand, Bohrungsabstand, Netz-Zusammenhang | ✅ 573 Kupferobjekte, 67 Netze, 0 Probleme |
+| Geometrie-DRC (`src/drc_geometry.py`): Clearance, Randabstand, Bohrungsabstand, Netz-Zusammenhang | ✅ 593 Kupferobjekte, 37 Bohrungen, 67 Netze, 0 Probleme |
 | Verbindungscheck (`tools/check_connectivity.py`): GND-, VCC- und Datenketten-Zusammenhang über alle Lagen | ✅ alle Netze zusammenhängend |
 | Machbarkeit (`src/feasibility.py`): kleinster machbarer Pitch größenabhängig (ungerade Zeilen **2.95 mm**, gerade Zeilen **3.0 mm** – Randzonen-Schiene an 90°-gedrehten Reihen) | ✅ |
 | Footprint gegen LCSC-API und Datenblatt verifiziert (Pads 0.45×0.65 mm) | ✅ |
 | JLCPCB **Economy**-Bestückung: keine Castellations, Bohrung ≥ 0.3 mm, Standard-Limits ohne Aufpreis | ✅ eingehalten |
-| Masken: alle 27 Bohrungen beidseitig maskenfrei (kein tenting → in 2D- und 3D-Ansicht sichtbar) | ✅ |
+| Masken: alle Bohrungen beidseitig maskenfrei (kein tenting → in 2D- und 3D-Ansicht sichtbar) | ✅ |
 
 **Nicht (mehr) getestet:** SK9822-EC20 / SPI-LEDs. Die aktuelle Pipeline (v2) ist
 auf die 4-Pin-WS2812-Topologie (C41413180) ausgelegt. Die v1-Module
@@ -62,7 +63,9 @@ hochgeladen.
 Vorderseite (F.Cu):  LED-Pads; Datenkette auf F.Cu (45°-Diagonalen innerhalb
                      der Reihe, direkte Vertikale zwischen den Reihen);
                      EINE horizontale Stromschiene je Reihenluecke,
-                     alternierend GND/VCC; je 3 Stitch-Vias (2 mm Abstand);
+                     alternierend GND/VCC, Breite = max. Platz der Luecke
+                     (Pad-Abstand - 2x Clearance); Stitch-Vias im 2-mm-Raster,
+                     mindestens 3 pro Schiene, mehr wenn Platz;
                      kleine Netzlabels (+V / G) mittig auf den Schienen
 Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, maximale
                      Breite (abzgl. DIN/DOUT-Anschlusspads, Minimum 2.5 mm); Anschlusspads DIN/DOUT (2.5×5 mm) und
@@ -87,7 +90,7 @@ Schiene versorgt; die Schienen enden bündig mit der letzten Stichleitung.
 | Clearance Leitung↔Leitung | 0.15 mm je Seite |
 | Randabstand Kupfer | 0.20 mm (randbündige Anschlusspads: bewusst ausgenommen) |
 | Datenleitung | 0.15 mm |
-| Schienen F.Cu / B.Cu | 0.40 mm / max. Breite (Boardbreite − GAP − Anschlusspads − Clearance), Minimum 2.5 mm sonst Abbruch |
+| Schienen F.Cu / B.Cu | dynamisch max.: Lückenbreite − 2×Clearance bzw. Boardbreite − GAP − Anschlusspads; Minima 0.4 mm / 2.5 mm sonst Abbruch |
 
 ## Prüfwerkzeuge
 

@@ -13,7 +13,7 @@ WS2812B-kompatibel). Ergebnis: **24 × 24 mm** Platinen, nahtlos kachelbar.
 ```bash
 python src/fetch_component.py C41413180        # Footprint laden (einmalig)
 python src/generate.py --cols 8 --rows 8 --pitch 3.0 --lcsc C41413180 \
-    --output output/XL-1615_8x8_v12.zip
+    --output output/XL-1615_8x8_v13.zip
 ```
 
 oder mit dieser Config: [`cfg/XL-1615_8x8.cfg`](../../cfg/XL-1615_8x8.cfg)
@@ -22,17 +22,17 @@ oder mit dieser Config: [`cfg/XL-1615_8x8.cfg`](../../cfg/XL-1615_8x8.cfg)
 
 | Prüfung | Kommando | Ergebnis |
 |---|---|---|
-| Machbarkeit | `python src/feasibility.py C41413180 8 8` | ✅ Pitch 3.0 ≥ Minimum 2.95 mm |
-| Geometrie-DRC | `python src/drc_geometry.py 3.0 8 8` | ✅ 573 Kupferobjekte, 67 Netze, 0 Verstöße |
+| Machbarkeit | `python src/feasibility.py C41413180 8 8` | ✅ Pitch 3.0 = Minimum (gerade Zeilenzahl) |
+| Geometrie-DRC | `python src/drc_geometry.py 3.0 8 8` | ✅ 593 Kupferobjekte, 37 Bohrungen, 67 Netze, 0 Verstöße |
 | Netz-Zusammenhang | `python tools/check_connectivity.py` | ✅ GND/VCC/Datenkette durchgängig |
-| Masken | ZIP-Parse GTS/GBS | ✅ alle 27 Via-Bohrungen beidseitig offen |
+| Masken | ZIP-Parse GTS/GBS | ✅ alle Via-Bohrungen beidseitig offen |
 | Footprint | LCSC-API + Datenblatt | ✅ Pads 0.45×0.65 mm, 1.70×1.60 mm Kupfer |
 
 ## Inhalt
 
 | Datei | Beschreibung |
 |---|---|
-| [`XL-1615_8x8_v12.zip`](XL-1615_8x8_v12.zip) | Fertigungsdaten (Gerber + Drill + BOM + CPL), direkt bei JLCPCB hochladbar |
+| [`XL-1615_8x8_v13.zip`](XL-1615_8x8_v13.zip) | Fertigungsdaten (Gerber + Drill + BOM + CPL), direkt bei JLCPCB hochladbar |
 | [`render_front.png`](render_front.png) | Eigener PNG-Render, Vorderseite (LED-Pads, Datenkette, Reihenschienen) |
 | [`render_back.png`](render_back.png) | Eigener PNG-Render, Rückseite (mittige GND/VCC-Rails, Anschlusspads, Beschriftung) |
 | [`jlcpcb_preview_top.png`](jlcpcb_preview_top.png) | 2D-Preview aus dem JLCPCB-Viewer, Oberseite |

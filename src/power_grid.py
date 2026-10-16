@@ -119,11 +119,14 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float) -> dict:
         net = "VCC" if nets_up == {"VDD"} else "GND"
         stub_x = [x for s, x, e, w, h in dn + up if s in ("VDD", "GND")]
         y = (min(y_up_edge) + max(y_dn_edge)) / 2.0
+        # Dynamische Breite: maximale Leiterbahnbreite der Luecke
+        # (Pad-Kanten-Abstand beider Reihen - 2x Clearance).
+        w_rail = (min(y_up_edge) - max(y_dn_edge)) - 2 * DR.CLEARANCE
         # Abschluss buendig mit der aeussersten Stichleitung (nicht Padkante)
         rails_top.append({"net": net, "y": y,
                           "x0": min(stub_x) - STUB_W / 2,
                           "x1": max(stub_x) + STUB_W / 2,
-                          "w": RAIL_TOP_W,
+                          "w": w_rail,
                           "stubs": [(x, e) for s, x, e, w, h in dn + up
                                     if s in ("VDD", "GND")]})
 
@@ -149,15 +152,20 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float) -> dict:
             raise RuntimeError(f"Randzone-Netz nicht eindeutig: {nets}")
         net = "VCC" if nets == {"VDD"} else "GND"
         pw = [(x, e) for s, x, e, w, h in pads if s in ("VDD", "GND")]
+        # Dynamische Breite: Platz zwischen Pad-Kante (+Clearance) und
+        # Boardrand (-EDGE_CLEAR). Bei p3 ergibt das exakt die bisherigen
+        # 0.3mm, bei groesserem Pitch breitere Randzonen-Schienen.
         if up:   # ueber der Reihe
-            y = max(e for _, e in pw) + DR.CLEARANCE + RAIL_EDGE_W / 2
+            w_edge = (H - DR.EDGE_CLEAR) - (max(e for _, e in pw) + DR.CLEARANCE)
+            y = max(e for _, e in pw) + DR.CLEARANCE + w_edge / 2
         else:
-            y = min(e for _, e in pw) - DR.CLEARANCE - RAIL_EDGE_W / 2
+            w_edge = (min(e for _, e in pw) - DR.CLEARANCE) - DR.EDGE_CLEAR
+            y = min(e for _, e in pw) - DR.CLEARANCE - w_edge / 2
         # Abschluss buendig mit der aeussersten Stichleitung
         rails_top.append({"net": net, "y": y,
                           "x0": min(x for x, _ in pw) - STUB_W / 2,
                           "x1": max(x for x, _ in pw) + STUB_W / 2,
-                          "w": RAIL_EDGE_W, "stubs": pw, "edge": True})
+                          "w": w_edge, "stubs": pw, "edge": True})
 
     edge_rail(by_row[top_row], up=True)
     edge_rail(by_row[bot_row], up=False)
@@ -183,9 +191,16 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float) -> dict:
             for x, y in cands[:2]:
                 stitch_vias.append((x, y, rail["net"], EDGE_VIA_PAD))
             continue
-        for i in range(N_STITCH):
-            x = cx + (i - (N_STITCH - 1) / 2.0) * STITCH_DX
-            if rail["x0"] + 0.35 <= x <= rail["x1"] - 0.35:
+        # Dynamisch: 2mm-Raster, so viele Vias wie in den Ueberlappungs-
+        # bereich von F.Cu-Schiene und B.Cu-Rail passen (mindestens N_STITCH).
+        rx0, rx1 = rail_cx_bounds[rail["net"]]
+        lo = max(rail["x0"], rx0) + 0.35
+        hi = min(rail["x1"], rx1) - 0.35
+        n = max(N_STITCH, int((hi - lo) // STITCH_DX) + 1)
+        mid = (lo + hi) / 2.0
+        for i in range(n):
+            x = mid + (i - (n - 1) / 2.0) * STITCH_DX
+            if lo - 1e-9 <= x <= hi + 1e-9:
                 stitch_vias.append((x, rail["y"], rail["net"],
                                     DR.VIA_PAD_D))
 
@@ -235,6 +250,8 @@ if __name__ == "__main__":
     assert len(pg["rails_top"]) == 9, "7 Luecken + 2 Randzonen"
     seq = [n[0] for n in nets]
     assert seq.count("GND") == 5 and seq.count("VCC") == 4, seq
-    assert len(pg["stitch_vias"]) == 7 * 3 + 2 * 2, "7x3 Innen + 2x2 Rand"
-    print("OK: 9 Schienen (5x GND, 4x VCC), %d Stitch-Vias"
-          % len(pg["stitch_vias"]))
+    assert len(pg["stitch_vias"]) >= 7 * 3 + 2 * 2, "min. 7x3 Innen + 2x2 Rand"
+    ws = [r["w"] for r in pg["rails_top"] if not r.get("edge")]
+    assert all(abs(w - 1.05) < 1e-3 for w in ws), ws  # p3: Luecke 1.35 - 2x CLR
+    print("OK: 9 Schienen (5x GND, 4x VCC), %d Stitch-Vias, Innen-Breite %.2fmm"
+          % (len(pg["stitch_vias"]), ws[0]))
