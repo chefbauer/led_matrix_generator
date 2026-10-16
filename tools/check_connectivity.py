@@ -8,8 +8,9 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from drc_geometry import collect_copper, shape_gap
 
-def main(pitch=3.0, cols=8, rows=8):
-    copper, (leds, pg, dc, W, H) = collect_copper(cols, rows, pitch)
+def main(pitch=3.0, cols=8, rows=8, edge_pads=False):
+    copper, (leds, pg, dc, W, H) = collect_copper(cols, rows, pitch,
+                                                  edge_pads=edge_pads)
 
     parent = list(range(len(copper)))
     def find(i):

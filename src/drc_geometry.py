@@ -96,11 +96,11 @@ def shape_gap(a, b):
     return max(0.0, _seg_rect_dist(seg, rect) - seg[4] / 2)
 
 
-def collect_copper(cols, rows, pitch, lcsc="C41413180"):
+def collect_copper(cols, rows, pitch, lcsc="C41413180", edge_pads=False):
     fp = footprint_from_data(lcsc)
     W, H = cols * pitch, rows * pitch
     leds = generate_matrix(cols, rows, pitch, fp)
-    pg = compute_power_grid(leds, fp, W, H, pitch)
+    pg = compute_power_grid(leds, fp, W, H, pitch, edge_pads=edge_pads)
     dc = compute_data_chain(leds, fp, W, H, pitch)
 
     copper: List[tuple] = []   # 4- oder 5-Tupel, wird unten normalisiert
@@ -174,8 +174,10 @@ def _gap(a: Rect, b: Rect) -> Tuple[float, float]:
     return dx, dy
 
 
-def run(pitch: float, cols: int = 8, rows: int = 8, lcsc: str = "C41413180"):
-    copper, (leds, pg, dc, W, H) = collect_copper(cols, rows, pitch, lcsc)
+def run(pitch: float, cols: int = 8, rows: int = 8, lcsc: str = "C41413180",
+        edge_pads: bool = False):
+    copper, (leds, pg, dc, W, H) = collect_copper(cols, rows, pitch, lcsc,
+                                                  edge_pads)
     problems: List[str] = []
 
     # --- 1+2: Clearance + Randabstand ----------------------------------
@@ -266,4 +268,5 @@ if __name__ == "__main__":
     pitch = float(sys.argv[1]) if len(sys.argv) > 1 else 3.0
     cols = int(sys.argv[2]) if len(sys.argv) > 2 else 8
     rows = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-    sys.exit(1 if run(pitch, cols, rows) else 0)
+    ep = "--edge-pads" in sys.argv[4:]
+    sys.exit(1 if run(pitch, cols, rows, edge_pads=ep) else 0)
