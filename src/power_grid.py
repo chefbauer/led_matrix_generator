@@ -29,6 +29,13 @@ import design_rules as DR
 GAP = 1.0            # Abstand der beiden B.Cu-Rails zueinander
 RAIL_MIN = 2.5       # Mindestbreite je B.Cu-Rail -> sonst Abbruch
 VIA_AMP = 0.3        # A: Tragfahigkeit eines 0.3mm-Vias (JLC)
+
+
+def _rail_w_for_amp(i_a: float) -> float:
+    """Leiterbahnbreite (mm) fuer i_a Ampere: IPC-2221 aussen, 1 oz, dT=10C.
+    I = 0.048 * dT^0.44 * A^0.75 (A in mil^2) -> invertiert."""
+    a_mil2 = (i_a / (0.048 * 10 ** 0.44)) ** (1.0 / 0.75)
+    return a_mil2 / 1.378 * 0.0254
 RAIL_TOP_W = 0.4     # Breite der F.Cu-Innenschienen
 RAIL_EDGE_W = 0.3    # Randzonen-Schienen: schmaler (0.7mm-Zone)
 STUB_W = 0.3         # Stub-Breite zu den Power-Pads
@@ -106,6 +113,7 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
     rail_cx = {"GND": (gnd[0] + gnd[2]) / 2, "VCC": (vcc[0] + vcc[2]) / 2}
     rail_cx_bounds = {"GND": (gnd[0], gnd[2]), "VCC": (vcc[0], vcc[2])}
     cols = len(by_row[rows[0]])
+    i_row = cols * led_ma / 1000.0
 
     # --- F.Cu: eine Schiene je Luecke + Randzonen ----------------------
     rails_top = []      # {net, y, x0, x1}
@@ -127,9 +135,12 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
         net = "VCC" if nets_up == {"VDD"} else "GND"
         stub_x = [x for s, x, e, w, h in dn + up if s in ("VDD", "GND")]
         y = (min(y_up_edge) + max(y_dn_edge)) / 2.0
-        # Dynamische Breite: maximale Leiterbahnbreite der Luecke
-        # (Pad-Kanten-Abstand beider Reihen - 2x Clearance).
-        w_rail = (min(y_up_edge) - max(y_dn_edge)) - 2 * DR.CLEARANCE
+        # Breite: ampazitaetsbasiert mit doppelter Sicherheit (IPC-2221
+        # aussen, 1oz, dT=10C), Minimum RAIL_TOP_W, Obergrenze = Luecke
+        # minus 2x Clearance.
+        gap_h = min(y_up_edge) - max(y_dn_edge)
+        w_need = _rail_w_for_amp(2 * i_row)
+        w_rail = min(gap_h - 2 * DR.CLEARANCE, max(RAIL_TOP_W, w_need))
         # Abschluss buendig mit der aeussersten Stichleitung (nicht Padkante)
         rails_top.append({"net": net, "y": y,
                           "x0": min(stub_x) - STUB_W / 2,
@@ -181,7 +192,6 @@ def compute_power_grid(leds, fp, W: float, H: float, pitch: float,
     # --- Stitching-Vias: Basis 3 (links/mitte/rechts auf der B.Cu-Rail),
     #     bei mehr Strom 5/7/9... symmetrisch; doppelte Sicherheit gegen
     #     Via-Tragfahigkeit VIA_AMP.
-    i_row = cols * led_ma / 1000.0
     n_via = max(N_STITCH, math.ceil(2 * i_row / VIA_AMP))
     if n_via % 2 == 0:
         n_via += 1
@@ -261,6 +271,6 @@ if __name__ == "__main__":
     assert seq.count("GND") == 5 and seq.count("VCC") == 4, seq
     assert len(pg["stitch_vias"]) >= 7 * 3 + 2 * 2, "min. 7x3 Innen + 2x2 Rand"
     ws = [r["w"] for r in pg["rails_top"] if not r.get("edge")]
-    assert all(abs(w - 1.05) < 1e-3 for w in ws), ws  # p3: Luecke 1.35 - 2x CLR
+    assert all(abs(w - RAIL_TOP_W) < 1e-3 for w in ws), ws  # 15mA -> Minimum
     print("OK: 9 Schienen (5x GND, 4x VCC), %d Stitch-Vias, Innen-Breite %.2fmm"
           % (len(pg["stitch_vias"]), ws[0]))
