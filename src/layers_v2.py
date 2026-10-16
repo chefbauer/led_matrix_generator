@@ -186,7 +186,7 @@ def build_outline(W: float, H: float) -> str:
 
 
 def build_drill(dc: dict, pg: dict) -> str:
-    lines = ["M48", "METRIC", f"T1C{DR.VIA_DRILL:.3f}", "%", "T1", "G05"]
+    lines = ["M48", "METRIC,TZ", f"T1C{DR.VIA_DRILL:.3f}", "%", "T1", "G05"]
     holes = [(x, y) for (x, y, _n, _pd) in pg["stitch_vias"]]
     holes += [(x, y) for (x, y) in dc["vias"]]
     for vx, vy in holes:
