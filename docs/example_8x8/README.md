@@ -13,7 +13,7 @@ WS2812B-kompatibel). Ergebnis: **24 × 24 mm** Platinen, nahtlos kachelbar.
 ```bash
 python src/fetch_component.py C41413180        # Footprint laden (einmalig)
 python src/generate.py --cols 8 --rows 8 --pitch 3.0 --lcsc C41413180 \
-    --output output/XL-1615_8x8_v14.zip
+    --output output/XL-1615_8x8_v15.zip
 ```
 
 oder mit dieser Config: [`cfg/XL-1615_8x8.cfg`](../../cfg/XL-1615_8x8.cfg)
@@ -32,7 +32,7 @@ oder mit dieser Config: [`cfg/XL-1615_8x8.cfg`](../../cfg/XL-1615_8x8.cfg)
 
 | Datei | Beschreibung |
 |---|---|
-| [`XL-1615_8x8_v14.zip`](XL-1615_8x8_v14.zip) | Fertigungsdaten (Gerber + Drill + BOM + CPL), direkt bei JLCPCB hochladbar |
+| [`XL-1615_8x8_v15.zip`](XL-1615_8x8_v15.zip) | Fertigungsdaten (Gerber + Drill + BOM + CPL), direkt bei JLCPCB hochladbar |
 | [`render_front.png`](render_front.png) | Eigener PNG-Render, Vorderseite (LED-Pads, Datenkette, Reihenschienen) |
 | [`render_back.png`](render_back.png) | Eigener PNG-Render, Rückseite (mittige GND/VCC-Rails, Anschlusspads, Beschriftung) |
 | [`jlcpcb_preview_top.png`](jlcpcb_preview_top.png) | 2D-Preview aus dem JLCPCB-Viewer, Oberseite |
@@ -41,7 +41,7 @@ oder mit dieser Config: [`cfg/XL-1615_8x8.cfg`](../../cfg/XL-1615_8x8.cfg)
 > [!NOTE]
 > Die JLCPCB-Viewer-Bilder stammen noch von Revision v13 (damals volle
 > Schienenbreite, andere Rand-Via-Position). Der ZIP und die eigenen Renders
-> zeigen die aktuelle Revision v14 (strombasierte Schienen, Strom-basierte
+> zeigen die aktuelle Revision v15 (strombasierte Schienen, Strom-basierte
 > Stitch-Vias).
 
 ## Was man sieht
