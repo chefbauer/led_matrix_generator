@@ -1,236 +1,120 @@
 # LED Matrix Generator
 
-> Direkt-Generator für JLCPCB-Fertigungsdaten aus Config-Dateien.  
-> Keine EDA-Software nötig.
-
-## Quickstart
-
-```bash
-# In einem Rutsch: Gerber + PNGs + Netz-Traces
-python3 src/generate.py --config cfg/SK9822_5x4.cfg
-
-# Nur Gerber
-python3 src/generate.py --config cfg/SK9822_5x4.cfg --no-preview
-
-# Neue LED laden (einmalig)
-python3 src/fetch_component.py C41413180
-```
-
-## Features
-
-| Feature | Status |
-|---|---|
-| **6-Pin SPI-LED** (SK9822, 2x2mm) | ✅ inkl. CLK-Routing, Busbar |
-| **4-Pin WS2812-LED** (XL-1615RGBC) | ✅ mit H-45-H Datenrouting |
-| **Busbar** (links, Top/Bottom) | ✅ GND/VDD Kupferflächen, Connector-Pads |
-| **Edge-Connector** (Halb-Löcher) | ✅ für 4-Pin busbar=0: GND/DI/VCC + GND/DO/VCC |
-| **Serpentinen-Matrix** | ✅ 270°/90° Rotation, H/V/45° Router |
-| **Drill (3 Werkzeuge)** | ✅ T1=0.30 Vias, T2=0.80 DAT/CLK, T3=1.00 +5V/GND |
-| **Auto-Preview** | ✅ PNG Vorder-/Rückseite bei jedem `generate` |
-| **Netz-Tracer** | ✅ `trace_net.py`: VCC/GND Kupferflächen visualisieren |
-| **Pin-1-Marker** | ✅ roter Punkt am DO-Pad im Render |
-| **Solder Mask** | ✅ 0.05 mm Expansion (JLCPCB-Standard) |
-| **Design Rules** | ✅ TRACE_DATA 0.20 mm, TRACE_POWER 0.30 mm, CLEARANCE 0.15 mm |
-
-## Ausgabe (ZIP)
-
-| Datei | Inhalt |
-|---|---|
-| `matrix-F_Cu.gtl` | Top Copper: Pads, Datenkette, Power-Stichleitungen, Edge-Connector |
-| `matrix-B_Cu.gbl` | Bottom Copper: VDD/GND-Schienen, Via-Pads, Edge-Connector-Stubs |
-| `matrix-F_Mask.gts` | Top Solder Mask |
-| `matrix-B_Mask.gbs` | Bottom Solder Mask |
-| `matrix-F_SilkS.gto` | Top Silkscreen |
-| `matrix-Edge_Cuts.gko` | Board Outline |
-| `matrix.drl` | Excellon Drill |
-| `BOM.csv` | Bill of Materials |
-| `CPL.csv` | Component Placement List |
-
-## Config-Parameter (`cfg/*.cfg`)
-
-| Parameter | Bedeutung |
-|---|---|
-| `cols` / `rows` | Matrixgröße |
-| `pitch` | Abstand Mitte-zu-Mitte in mm |
-| `margin` | Rand (`0` = `pitch/2`) |
-| `busbar` | `0` = keine, `1` = links |
-| `led_current_ma` | mA pro LED |
-| `copper_oz` | Kupfergewicht (1 oder 2) |
-| `jlcpcb_part` | LCSC-Teilenummer |
-
-## Unterstützte LEDs
-
-| LED | LCSC # | Pads | CLK |
-|---|---|---|---|
-| SK9822-EC20 | C2909059 | 6 | ✅ |
-| XL-1615RGBC-2812B-S | C41413180 | 4 | ❌ |
-
-## Weitere Tools
-
-```bash
-# Netz-Tracer (Kurzschluss-Prüfung)
-python3 src/trace_net.py output/SK9822_5x4.zip --dpmm 100
-# → *_vcc.png + *_gnd.png
-
-# PNG-Vorschau (manuell)
-python3 src/render_preview.py output/SK9822_5x4.zip --dpmm 100
-```
-
-## Koordinatensystem
-
-Siehe [`koordinatensysteme.md`](koordinatensysteme.md) — vollständige Dokumentation aller verwendeten Koordinatensysteme (Gerber RS-274X, EasyEDA, pygerber, Footprint).
+> Direkt-Generator für JLCPCB-Fertigungsdaten (Gerber + Drill + BOM + CPL)
+> aus einer Zeile Kommandozeile oder einer Config-Datei. Keine EDA-Software nötig.
 
 Es gibt viele fertige LED-Matrizen zu kaufen – aber irgendwas ist immer:
-zu gross, zu klein, falsches Seitenverhaeltnis, nicht kuerzbar, nicht erweiterbar.
-Wer eine Matrix in genau der richtigen Groesse braucht, hat meist keine gute Option.
+zu gross, zu klein, falsches Seitenverhältnis, nicht kürzbar, nicht erweiterbar.
+Dieser Generator löst das: Spalten, Zeilen, Pitch eingeben – fertige
+Produktionsdaten für die eigene, massgeschneiderte LED-Matrix kommen raus.
+Die Platinen sind **nahtlos kachelbar** (Boardgröße = cols×pitch × rows×pitch),
+mehrere Platinen lassen sich kantig an kantig zu einer großen Fläche reihen.
 
-Dieser Generator loest das Problem: Spalten, Zeilen und Pitch eingeben –
-fertige Produktionsdaten fuer die eigene, massgeschneiderte LED-Matrix kommen raus.
-Die Platine wird direkt bei JLCPCB bestellt und bestueckt, kein Loeten, kein Basteln.
+## Was ist getestet?
 
-Unterstuetzt werden SPI-adressierbare LEDs wie der SK9822-EC20 (APA102-kompatibel).
-Das Routing, die Stromversorgung und alle Fertigungsdateien werden automatisch generiert (WIP).
+Ausdrücklich generiert, geprüft und verifiziert (Stand Okt 2026):
 
----
+| Was | Ergebnis |
+|---|---|
+| **LED:** XL-1615RGBC-WS2812B-S, LCSC **C41413180** (WS2812B-kompatibel, 1.6×1.7 mm) | ✅ |
+| **8×8-Matrix, Pitch 3.0 mm** → Board 24×24 mm (ZIP `XL-1615_8x8_v12`) | ✅ |
+| Geometrie-DRC (`src/drc_geometry.py`): Clearance, Randabstand, Bohrungsabstand, Netz-Zusammenhang | ✅ 573 Kupferobjekte, 67 Netze, 0 Probleme |
+| Verbindungscheck (`tools/check_connectivity.py`): GND-, VCC- und Datenketten-Zusammenhang über alle Lagen | ✅ alle Netze zusammenhängend |
+| Machbarkeit (`src/feasibility.py`): kleinster machbarer Pitch für C41413180 = **2.95 mm** | ✅ (getestet mit 3.0) |
+| Footprint gegen LCSC-API und Datenblatt verifiziert (Pads 0.45×0.65 mm) | ✅ |
+| JLCPCB **Economy**-Bestückung: keine Castellations, Bohrung ≥ 0.3 mm, Standard-Limits ohne Aufpreis | ✅ eingehalten |
+| Masken: alle 27 Bohrungen beidseitig maskenfrei (kein tenting → in 2D- und 3D-Ansicht sichtbar) | ✅ |
 
-Generiert fertige Produktionsdaten (Gerber + BOM + CPL) fuer addressierbare LED-Matrizen
-direkt aus einer Konfigurationsdatei – ohne EDA-Tool, ohne externe Abhaengigkeiten.
-
-**Ausgabe:** Ein ZIP-Paket, das direkt bei JLCPCB hochgeladen werden kann (SMT Assembly).
-BOM und CPL sind in der Zip, müssen aber extra hochgeladen werden.
-
-
-## Voraussetzungen
-
-- Python 3.10+
-- Internetzugang (einmalig fuer Bauteil-Download)
-
----
+**Nicht (mehr) getestet:** SK9822-EC20 / SPI-LEDs. Die aktuelle Pipeline (v2) ist
+auf die 4-Pin-WS2812-Topologie (C41413180) ausgelegt. Die v1-Module
+(`bottom_copper`, `top_copper`, `edge_connector`, `router`, `trace_net`) sind
+Legacy und werden von `generate.py` nicht mehr verwendet.
 
 ## Schnellstart
 
-### 1. Bauteil-Daten laden (einmalig, wird gecacht)
-
 ```bash
-python3 src/fetch_component.py C2909059
+# Bauteil-Daten laden (einmalig, wird nach data/ gecacht)
+python src/fetch_component.py C41413180
+
+# Matrix generieren; --pitch weglassen = kleinster machbarer Pitch
+python src/generate.py --cols 8 --rows 8 --pitch 3.0 --lcsc C41413180 \
+    --output output/XL-1615_8x8.zip
+
+# oder per Config (Dateiname = Ausgabename)
+python src/generate.py --config cfg/XL-1615_8x8.cfg
 ```
 
-Laedt Pad-Geometrie und Metadaten von der EasyEDA-API.
-Gecachte Daten werden automatisch wiederverwendet.
-Mit `--force-download` neu laden:
+Zum ZIP gibt es immer PNG-Render von Vorder-/Rückseite (`--no-preview` zum
+Abschalten). BOM.csv und CPL.csv liegen im ZIP und werden bei JLCPCB separat
+hochgeladen.
 
-```bash
-python3 src/fetch_component.py C2909059 --force-download
+## Layout-Topologie (v2)
+
+```
+Vorderseite (F.Cu):  LED-Pads; Datenkette auf F.Cu (45°-Diagonalen innerhalb
+                     der Reihe, direkte Vertikale zwischen den Reihen);
+                     EINE horizontale Stromschiene je Reihenluecke,
+                     alternierend GND/VCC; je 3 Stitch-Vias (2 mm Abstand);
+                     kleine Netzlabels (+V / G) mittig auf den Schienen
+Rückseite  (B.Cu):   ZWEI vertikale Haupt-Rails GND/VCC, mittig, je >= 1/3
+                     der Boardbreite; Anschlusspads DIN/DOUT (2.5×5 mm) und
+                     VCC/GND-Flaechen (5×5 mm) randbuendig; Beschriftung
+                     GND/VCC je 2× mittig auf den Rails, DIN/DOUT 90° gestapelt
+Rotation:            Basis 180° (DI links oben), gerade Reihen relativ -90°,
+                     damit VDD↔VDD und GND↔GND sich über den Lücken gegenueberliegen
+Daten-Einstieg:      DIN oben links, DOUT unten links; je 1 Via von den
+                     B.Cu-Anschlusspads auf die F.Cu-Kette
 ```
 
-### 2. Config-Datei erstellen
+Stromführung: Board-Rails (B.Cu) → Stitch-Vias → Reihenschienen (F.Cu) →
+Stichleitungen zu den Power-Pads. Jede LED-Reihe wird über genau eine
+Schiene versorgt; die Schienen enden bündig mit der letzten Stichleitung.
 
-Configs liegen im Ordner `cfg/`. Dateiname = Ausgabename des ZIP.
+## Design-Regeln (JLCPCB Economy)
 
-**Beispiel: `cfg/SK9822_5x4.cfg`**
-
-```ini
-# LED-Matrix Konfiguration
-# Ausgabe: output/SK9822_5x4.zip
-
-[matrix]
-cols   = 5        # Anzahl Spalten
-rows   = 4        # Anzahl Zeilen
-pitch  = 5.0      # Abstand LED-Mitte zu LED-Mitte in mm
-margin = 0        # Zusaetzlicher Rand in mm (0 = nur pitch/2)
-
-[led]
-jlcpcb_part = C2909059   # JLCPCB/LCSC Teilenummer
-```
-
-**Board-Groesse:** `(cols-1)*pitch + 2*(pitch/2 + margin)` × `(rows-1)*pitch + 2*(pitch/2 + margin)`
-
-Bei `margin=0` liegt die Platinenkante genau `pitch/2` vom aeussersten LED-Mittelpunkt entfernt.
-
-Beispiele:
-| Config | Board |
+| Regel | Wert |
 |---|---|
-| cols=5, rows=4, pitch=5, margin=0 | 25 × 20 mm |
-| cols=32, rows=11, pitch=5, margin=0 | 165 × 60 mm |
-| cols=32, rows=11, pitch=5, margin=2 | 169 × 64 mm |
+| Bohrungs-Ø Vias | 0.30 mm (Pad 0.60 mm) |
+| Clearance Leitung↔Leitung | 0.15 mm je Seite |
+| Randabstand Kupfer | 0.20 mm (randbündige Anschlusspads: bewusst ausgenommen) |
+| Datenleitung | 0.15 mm |
+| Schienen F.Cu / B.Cu | 0.40 mm / ≥ 1/3 Boardbreite |
 
-### 3. Generieren
-
-```bash
-python3 src/generate.py --config cfg/SK9822_5x4.cfg
-```
-
-Ausgabe: `output/SK9822_5x4.zip`
-
-Einzelne Parameter koennen per CLI ueberschrieben werden:
+## Prüfwerkzeuge
 
 ```bash
-python3 src/generate.py --config cfg/SK9822_5x4.cfg --rows 6
+python src/feasibility.py C41413180 8 8    # Machbarkeit + kleinster Pitch
+python src/drc_geometry.py 3.0 8 8         # DRC auf der Generator-Geometrie
+python tools/check_connectivity.py         # Netz-Zusammenhang GND/VCC/Daten
+python tools/layout_schema.py output       # parametrisches Layout-Schema (PNG)
+python src/render_preview.py output/x.zip  # PNG-Render aus einem bestehenden ZIP
 ```
 
----
-
-## Ausgabedateien (ZIP)
+## Ausgabe (ZIP, JLCPCB-Namenskonvention)
 
 | Datei | Inhalt |
 |---|---|
-| `matrix-F_Cu.gtl` | Top Copper: LED-Pads, Datenleitungen (DI/DO, CI/CO), Via-Stichleitungen |
-| `matrix-B_Cu.gbl` | Bottom Copper: VDD/GND-Stromschienen pro Reihe |
-| `matrix-F_Mask.gts` | Top Solder Mask |
-| `matrix-B_Mask.gbs` | Bottom Solder Mask |
+| `matrix-F_Cu.gtl` | LED-Pads, Datenkette, Reihen-Schienen, Via-Pads, Labels |
+| `matrix-B_Cu.gbl` | mittige GND/VCC-Rails, Anschlusspads, Via-Pads |
+| `matrix-F_Mask.gts` / `matrix-B_Mask.gbs` | Masken: LED-Pads, Anschlusspads, alle Via-Öffnungen |
+| `matrix-F_SilkS.gto` / `matrix-B_SilkS.gbo` | Netz-Labels (Vorderseite klein, Rückseite groß) |
 | `matrix-Edge_Cuts.gko` | Board Outline |
-| `matrix.drl` | Excellon Drill (Vias) |
-| `BOM.csv` | Bill of Materials (JLCPCB SMT Format) |
-| `CPL.csv` | Component Placement List (JLCPCB SMT Format) |
+| `matrix.drl` | Excellon-Drill |
+| `BOM.csv` / `CPL.csv` | JLCPCB SMT-Assembly |
 
----
+## Voraussetzungen
 
-## Layout-Konzept
+Python 3.10+, Pakete: `pygerber`, `pillow` (nur für den PNG-Render).
+Internet nur einmalig für `fetch_component.py`.
 
-```
-Oberseite (Top):   LED-Pads + Datenleitungen (DI/DO, CI/CO) im Serpentinenmuster
-Unterseite (Bottom): Stromschienen VDD und GND pro Reihe, je pitch/2 breit
-Vias:              Senkrecht vom Pad zur Stromschiene
-```
+## Weiteres
 
-Jede LED-Reihe hat einen eigenen VDD-Bus und GND-Bus auf gegenueberliegenden Seiten.
-Bei geraden Reihen (→) liegt VDD unten, GND oben. Bei ungeraden (←) umgekehrt.
-
-**Design Rules:** Mindestabstand 0.30 mm (= 2 × 0.15 mm Clearance), Bus-Breite bei p=5mm: 2.20 mm.
-
----
-
-## Unterstuetzte LEDs
-
-| LED | JLCPCB # | Package | Klasse |
-|---|---|---|---|
-| SK9822-EC20 | C2909059 | LED-SMD_6P-L2.0-W2.0-P0.80-TL | Extended Part |
-
-Weitere LEDs: `python3 src/fetch_component.py <JLCPCB-Nr>` laden, dann in Config eintragen.
-
----
-
-## Verzeichnisstruktur
-
-```
-led_matrix_generator/
-├── cfg/                  # Konfigurationsdateien
-│   ├── SK9822_5x4.cfg
-│   └── SK9822_32x11.cfg
-├── src/                  # Python-Quellcode
-│   ├── generate.py       # Hauptskript
-│   ├── fetch_component.py
-│   └── ...
-├── data/                 # Gecachte Bauteil-Daten (EasyEDA API)
-│   └── C2909059/
-│       ├── component.json
-│       ├── footprint.json
-│       └── raw.json
-└── output/               # Generierte ZIPs
-```
+- [`koordinatensysteme.md`](koordinatensysteme.md) – Dokumentation der verwendeten
+  Koordinatensysteme (Gerber RS-274X, EasyEDA-API, pygerber, Footprint)
+- [`PLAN.md`](PLAN.md) – Architekturentscheidungen der v2-Umstellung
+- `data/<LCSC-Nr>/` – gecachte Footprint-Daten der EasyEDA-API
 
 ---
 
 Idee von Mir :)
-Programmiert mit Hilfe von Claude Sonnet 4.6
-
+Programmiert mit Hilfe von KI (Claude / Hermes Agent)
