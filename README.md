@@ -3,6 +3,12 @@
 > Direkt-Generator für JLCPCB-Fertigungsdaten (Gerber + Drill + BOM + CPL)
 > aus einer Zeile Kommandozeile oder einer Config-Datei. Keine EDA-Software nötig.
 
+> [!WARNING]
+> **Warnung: Das aktuelle v2-Layout wurde noch NICHT bei JLCPCB bestellt und ist
+> physisch ungetestet.** Alle Haken unten beziehen sich auf simulierte Prüfung
+> (DRC, Konnektivität, Masken, Machbarkeit). Erst nach einem echten Bestell- und
+> Bestückungstest gilt das Design als verifiziert.
+
 Es gibt viele fertige LED-Matrizen zu kaufen – aber irgendwas ist immer:
 zu gross, zu klein, falsches Seitenverhältnis, nicht kürzbar, nicht erweiterbar.
 Dieser Generator löst das: Spalten, Zeilen, Pitch eingeben – fertige
@@ -10,7 +16,7 @@ Produktionsdaten für die eigene, massgeschneiderte LED-Matrix kommen raus.
 Die Platinen sind **nahtlos kachelbar** (Boardgröße = cols×pitch × rows×pitch),
 mehrere Platinen lassen sich kantig an kantig zu einer großen Fläche reihen.
 
-## Was ist getestet?
+## Was ist geprüft? (alles simuliert – keine reale Platine!)
 
 Ausdrücklich generiert, geprüft und verifiziert (Stand Okt 2026):
 

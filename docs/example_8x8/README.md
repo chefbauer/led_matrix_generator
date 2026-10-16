@@ -1,6 +1,10 @@
 # Beispiel: 8×8-Matrix (XL-1615RGBC-WS2812B-S)
 
-Durchgetestetes Referenzbeispiel des Generators: **8 Spalten × 8 Zeilen,
+> [!WARNING]
+> Noch nicht bei JLCPCB bestellt / physisch ungetestet – alle Prüfungen sind
+> simuliert (DRC, Konnektivität, Masken).
+
+Durchgetestetes (simuliert) Referenzbeispiel des Generators: **8 Spalten × 8 Zeilen,
 Pitch 3.0 mm**, LED **XL-1615RGBC-WS2812B-S** (LCSC **C41413180**,
 WS2812B-kompatibel). Ergebnis: **24 × 24 mm** Platinen, nahtlos kachelbar.
 
